@@ -1,0 +1,41 @@
+"use strict"
+
+import { Page, PathProps, renderHtml } from "runtime:ssr_runtime.tsx"
+import Page from "./{{ $.Path }}"
+
+{{- if $.Layout }}
+import Layout from "./{{ $.Layout.Path }}"
+{{- end }}
+
+{{- if $.Error }}
+import Error from "./{{ $.Error.Path }}"
+{{- end }}
+
+{{- range $i, $frame := $.Frames }}
+import Frame{{ $i }} from "./{{ $frame.Path }}"
+{{- end }}
+
+
+import Entry from "./{{ $.EntryPath }}"
+
+const page: Page = {
+  content: {
+
+  },
+  {{- if $.Layout }}
+  layout: {
+    path:
+  },
+  {{- end }}
+
+  {{- if $.LiveRoute }}
+  liveRoute: {{ $.LiveRoute }},
+  {{- end }}
+  {{- if $.ClientRoute }}
+  clientRoute: {{ $.ClientRoute }},
+  {{- end }}
+}
+
+export function render(pathProps: PathProps) {
+  return renderHtml(page, pathProps)
+}

@@ -2,7 +2,7 @@ import React from "react"
 
 export type Props = {
   title: string
-  children?: React.ReactNode
+  children: React.ReactNode
 }
 
 export default function Layout(props: Props) {

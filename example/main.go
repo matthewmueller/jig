@@ -27,6 +27,9 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
+		react := react.Layout("layout.tsx", map[string]any{
+			"title": "Home Page",
+		})
 		if err := react.Render(w, "index.jsx", map[string]any{
 			"name": "Matt",
 		}); err != nil {
@@ -38,6 +41,9 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
+		react := react.Layout("layout.tsx", map[string]any{
+			"title": "Dashboard",
+		})
 		if err := react.Render(w, "dashboard/dashboard.tsx", map[string]any{
 			"name": "Matt",
 		}); err != nil {
@@ -49,6 +55,9 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
+		react := react.Layout("layout.tsx", map[string]any{
+			"title": "About",
+		})
 		react.Render(w, "about.jsx", map[string]any{
 			"name": "Max",
 		})
