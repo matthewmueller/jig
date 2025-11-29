@@ -1,0 +1,35 @@
+import { renderHTML } from "static_runtime.tsx"
+import * as Page from "./{{ $.Path }}"
+
+{{- if $.Layout }}
+import * as Layout from "./{{ $.Layout.Path }}"
+{{- end }}
+
+{{- if $.Error }}
+import * as Error from "./{{ $.Error.Path }}"
+{{- end }}
+
+{{- range $i, $frame := $.Frames }}
+import * as Frame{{ $i }} from "./{{ $frame.Path }}"
+{{- end }}
+
+export function render(props) {
+	return renderHTML({
+		Page: Page,
+		frames: [
+			{{- range $i, $frame := $.Frames }}
+			Frame{{ $i }},
+			{{- end}}
+		],
+		{{- if $.Layout }}
+		Layout: Layout,
+		{{- end }}
+		{{- if $.Error }}
+		Error: Error,
+		{{- end }}
+		clientPath: "{{ $.Client }}",
+		path: "{{ $.Path }}",
+		route: "{{- if $.Route }}{{ $.Route.Path }}{{ end }}",
+		props: props || {}
+	})
+}

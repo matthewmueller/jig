@@ -1,0 +1,38 @@
+import { hydrateDOM } from "client_runtime.tsx"
+import * as Page from "./{{ $.Path }}"
+
+{{- if $.Error }}
+import * as Error from "./{{ $.Error.Path }}"
+{{- end }}
+
+{{- range $i, $frame := $.Frames }}
+import * as Frame{{ $i }} from "./{{ $frame.Path }}"
+{{- end }}
+
+const route = {
+	path: "{{ $.Route.Path }}",
+	pattern: /{{ $.Route.Pattern }}/,
+	slots: [
+		{{- range $slot := $.Route.Slots }}
+		"{{ $slot }}",
+		{{- end }}
+	]
+}
+
+hydrateDOM({
+	Page: Page,
+	frames: [
+		{{- range $i, $frame := $.Frames }}
+		Frame{{ $i }},
+		{{- end }}
+	],
+	Error: Error,
+	route: route,
+	clientPath: "{{ $.Client }}",
+	target: document.getElementById("elmo") || document.body
+})
+
+export {
+	Page,
+	route
+}

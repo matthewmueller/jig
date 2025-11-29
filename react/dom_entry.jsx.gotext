@@ -1,0 +1,15 @@
+import { hydrateRoot } from "react-dom/client";
+import Entry from "./{{ .EntryPath }}";
+
+function tryParse(el) {
+  try {
+    return JSON.parse(el.textContent)
+  } catch (err) {
+    console.error("react: unable to parse props", err)
+    return {}
+  }
+}
+
+const props = tryParse(document.getElementById("react-props"))
+const root = document.getElementById("root") || document.body;
+hydrateRoot(root, <Entry {...props} />);

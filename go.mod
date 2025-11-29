@@ -1,0 +1,41 @@
+module github.com/matthewmueller/views
+
+go 1.24.4
+
+require (
+	github.com/dop251/goja v0.0.0-20251121114222-56b1242a5f86
+	github.com/evanw/esbuild v0.27.0
+	github.com/livebud/cli v0.0.22
+	github.com/livebud/npm v0.1.0
+	github.com/matryer/is v1.4.1
+	github.com/matthewmueller/diff v0.0.3
+	github.com/matthewmueller/glob v0.1.1
+	github.com/matthewmueller/jsx v0.0.11
+	github.com/matthewmueller/logs v0.0.8
+	github.com/matthewmueller/styledjsx v0.0.7
+	github.com/matthewmueller/virt v0.0.14
+	golang.org/x/net v0.47.0
+	golang.org/x/sync v0.18.0
+)
+
+require (
+	github.com/Masterminds/semver/v3 v3.2.1 // indirect
+	github.com/dlclark/regexp2 v1.11.4 // indirect
+	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
+	github.com/gobwas/glob v0.2.3 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
+	github.com/hexops/valast v1.4.4 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
+	github.com/lithammer/dedent v1.1.0 // indirect
+	github.com/livebud/color v0.0.2 // indirect
+	github.com/matthewmueller/css v0.0.4 // indirect
+	github.com/sergi/go-diff v1.3.1 // indirect
+	github.com/xlab/treeprint v1.2.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/tools v0.38.0 // indirect
+	mvdan.cc/gofumpt v0.7.0 // indirect
+)
