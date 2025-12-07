@@ -1,4 +1,4 @@
-import { ComponentType, createContext, JSX, Fragment } from "react"
+import { ComponentType, createContext, JSX, Fragment, ReactNode } from "react"
 import { renderToString } from "react-dom/server"
 
 type Context = {
@@ -11,88 +11,149 @@ const Context = createContext<Context>({
   heads: {},
 })
 
-export type View = {
-  path: string
-  Component: ComponentType<any>
-}
-
 export type Page = {
-  layout?: View
-  error?: View
-  frames: View[]
-  content: View
+  LayoutView?: ComponentType<any>
+  ErrorView?: ComponentType<any>
+  EntryView: ComponentType<any>
   clientRoute?: string
   liveRoute?: string
 }
 
 export type PathProps = Record<string, unknown>
 
-const defaultLayout: View = {
-  path: "default_layout",
-  Component: ({
-    head,
-    script,
-    children,
-  }: {
-    head: JSX.Element
-    script: JSX.Element
-    children: React.ReactNode
-  }) => (
-    <html>
-      <head>{head}</head>
-      <body>
-        {children}
-        {script}
-      </body>
-    </html>
-  ),
+type LayoutProps = {
+  head: JSX.Element
+  children: React.ReactNode
 }
 
-export function renderHtml(
-  { layout, error, frames, content, clientRoute, liveRoute }: Page,
-  pathProps: PathProps
-) {
-  const context: Context = {
-    styles: {},
-    heads: {},
+function defaultLayout(props: LayoutProps) {
+  return (
+    <html>
+      <head>{props.head}</head>
+      <body>{props.children}</body>
+    </html>
+  )
+}
+
+type ErrorProps = {
+  error: Error
+}
+
+function defaultError(props: ErrorProps) {
+  return <div>An error occurred: {props.error.message}</div>
+}
+
+function renderToHtml(element: ReactNode): string | Error {
+  try {
+    return renderToString(element)
+  } catch (err) {
+    // TODO: make error if not already
+    return err as Error
   }
-  const contentProps = pathProps[content.path] || {}
-  const contentHTML = renderToString(
+}
+
+function renderError(page: Page, context: Context, error: Error): string {
+  let { LayoutView, ErrorView, liveRoute } = page
+  ErrorView = ErrorView || defaultError
+  let contentHtml = renderToHtml(
     <Context.Provider value={context}>
-      <content.Component {...contentProps} />
+      <ErrorView error={error} />
     </Context.Provider>
   )
+  if (contentHtml instanceof Error) {
+    // Try again with the default error handler
+    page.ErrorView = defaultError
+    return renderError(page, context, contentHtml)
+  }
+  // TODO: we can probably dedupe some of this
   const heads: JSX.Element[] = []
+  if (liveRoute) {
+    heads.push(<script key={liveRoute} async type="module" src={liveRoute} />)
+  }
   for (let key in context.heads) {
     heads.push(context.heads[key])
   }
   for (let id in context.styles) {
     heads.push(
-      <style id={id} dangerouslySetInnerHTML={{ __html: context.styles[id] }} />
+      <style
+        key={id}
+        id={id}
+        dangerouslySetInnerHTML={{ __html: context.styles[id] }}
+      />
     )
   }
-  const scripts = []
-  if (clientRoute) {
-    scripts.push(
-      <script
-        type="text/template"
-        id="react-props"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(contentProps) }}
-      ></script>,
-      <script async defer type="module" src={clientRoute} />
-    )
-  }
-  if (liveRoute) {
-    scripts.push(<script async defer type="module" src={liveRoute} />)
-  }
-  layout = layout || defaultLayout
-  const html = renderToString(
-    <layout.Component
-      head={<Fragment>{heads}</Fragment>}
-      script={<Fragment>{scripts}</Fragment>}
-    >
-      <div id="go-react" dangerouslySetInnerHTML={{ __html: contentHTML }} />
-    </layout.Component>
+  LayoutView = LayoutView || defaultLayout
+  let html = renderToHtml(
+    <LayoutView head={<Fragment>{heads}</Fragment>}>
+      <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
+    </LayoutView>
   )
+  if (html instanceof Error) {
+    page.LayoutView = defaultLayout
+    return renderError(page, context, html)
+  }
+  return `<!doctype html>` + html
+}
+
+export function renderHtml(page: Page, props: unknown): string {
+  let { LayoutView, EntryView, clientRoute, liveRoute } = page
+  const context: Context = {
+    styles: {},
+    heads: {},
+  }
+  if (typeof props !== "object") {
+    return renderError(
+      page,
+      context,
+      new Error("react: props must be an object")
+    )
+  }
+  let contentHtml = renderToHtml(
+    <Context.Provider value={context}>
+      <EntryView {...props} />
+    </Context.Provider>
+  )
+  if (contentHtml instanceof Error) {
+    return renderError(page, context, contentHtml)
+  }
+  const heads: JSX.Element[] = []
+  if (liveRoute) {
+    heads.push(<script key={liveRoute} async type="module" src={liveRoute} />)
+  }
+  if (clientRoute) {
+    heads.push(
+      <script key={clientRoute} defer type="module" src={clientRoute} />
+    )
+  }
+  for (let key in context.heads) {
+    heads.push(context.heads[key])
+  }
+  for (let id in context.styles) {
+    heads.push(
+      <style
+        key={id}
+        id={id}
+        dangerouslySetInnerHTML={{ __html: context.styles[id] }}
+      />
+    )
+  }
+  LayoutView = LayoutView || defaultLayout
+  let html = renderToHtml(
+    <LayoutView head={<Fragment>{heads}</Fragment>}>
+      <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
+      {clientRoute && (
+        <script
+          key="react-props"
+          type="application/json"
+          id="react-props"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(props) }}
+        ></script>
+      )}
+    </LayoutView>
+  )
+  // TODO: dedupe with above
+  if (html instanceof Error) {
+    return renderError(page, context, html)
+  }
   return `<!doctype html>` + html
 }

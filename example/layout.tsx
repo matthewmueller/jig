@@ -1,16 +1,14 @@
 import React from "react"
 
 export type Props = {
-  title: string
+  head: React.ReactNode
   children: React.ReactNode
 }
 
 export default function Layout(props: Props) {
   return (
     <html>
-      <head>
-        <title>{props.title}</title>
-      </head>
+      <head>{props.head}</head>
       <body className="whatever">{props.children}</body>
     </html>
   )

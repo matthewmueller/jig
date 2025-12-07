@@ -11,9 +11,9 @@ import (
 	"github.com/matthewmueller/views/react"
 )
 
-//go:generate go run github.com/matthewmueller/views/cmd/react *.tsx
+//go:generate go run github.com/matthewmueller/views/cmd/react **.tsx
 
-//go:embed dist/**.js
+//go:embed dist/**
 var distfs embed.FS
 
 func main() {
@@ -27,10 +27,7 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		react := react.Layout("layout.tsx", map[string]any{
-			"title": "Home Page",
-		})
-		if err := react.Render(w, "index.jsx", map[string]any{
+		if err := react.Render(w, "index.tsx", map[string]any{
 			"name": "Matt",
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -41,9 +38,6 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		react := react.Layout("layout.tsx", map[string]any{
-			"title": "Dashboard",
-		})
 		if err := react.Render(w, "dashboard/dashboard.tsx", map[string]any{
 			"name": "Matt",
 		}); err != nil {
@@ -55,10 +49,7 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		react := react.Layout("layout.tsx", map[string]any{
-			"title": "About",
-		})
-		react.Render(w, "about.jsx", map[string]any{
+		react.Render(w, "about.tsx", map[string]any{
 			"name": "Max",
 		})
 	}))

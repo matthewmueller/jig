@@ -1,5 +1,6 @@
-import { hydrateRoot } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import Entry from "./{{ .EntryPath }}";
+import { StrictMode } from 'react';
 
 function tryParse(el) {
   try {
@@ -11,5 +12,5 @@ function tryParse(el) {
 }
 
 const props = tryParse(document.getElementById("react-props"))
-const root = document.getElementById("root") || document.body;
-hydrateRoot(root, <Entry {...props} />);
+const root = createRoot(document.getElementById("root") || document.body)
+root.render(<StrictMode><Entry {...props} /></StrictMode>)

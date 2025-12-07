@@ -39,14 +39,6 @@ type command struct {
 	Paths []string
 }
 
-func isOutside(base, target string) bool {
-	rel, err := filepath.Rel(base, target)
-	if err != nil {
-		return false
-	}
-	return strings.HasPrefix(rel, "..")
-}
-
 func (c *command) Run(ctx context.Context) error {
 	dir, err := directory.Resolve(c.Dir)
 	if err != nil {
@@ -68,9 +60,11 @@ func (c *command) Run(ctx context.Context) error {
 	}
 	react := react.New(c.log)
 	react.Dir = dir
+	// TODO: smarter production detection (flip the default)
+	react.Minify = true
+	react.LiveRoute = ""
 	if err := react.Build(paths...); err != nil {
 		return err
 	}
-	fmt.Println("React command executed", dir, c.Paths)
 	return nil
 }

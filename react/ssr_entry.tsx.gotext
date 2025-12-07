@@ -1,41 +1,30 @@
 "use strict"
 
-import { Page, PathProps, renderHtml } from "runtime:ssr_runtime.tsx"
-import Page from "./{{ $.Path }}"
+import { Page, renderHtml } from "runtime:ssr_runtime.tsx"
+import EntryView from "./{{ $.Page.EntryPath }}"
 
-{{- if $.Layout }}
-import Layout from "./{{ $.Layout.Path }}"
+{{- if $.Page.LayoutPath }}
+import LayoutView from "./{{ $.Page.LayoutPath }}"
 {{- end }}
 
-{{- if $.Error }}
-import Error from "./{{ $.Error.Path }}"
+{{- if $.Page.ErrorPath }}
+import ErrorView from "./{{ $.Page.ErrorPath }}"
 {{- end }}
-
-{{- range $i, $frame := $.Frames }}
-import Frame{{ $i }} from "./{{ $frame.Path }}"
-{{- end }}
-
-
-import Entry from "./{{ $.EntryPath }}"
 
 const page: Page = {
-  content: {
-
-  },
-  {{- if $.Layout }}
-  layout: {
-    path:
-  },
-  {{- end }}
-
+  EntryView,
+  clientRoute: "/{{ $.Page.EntryPath }}.js",
   {{- if $.LiveRoute }}
-  liveRoute: {{ $.LiveRoute }},
+  liveRoute: "{{ $.LiveRoute }}",
   {{- end }}
-  {{- if $.ClientRoute }}
-  clientRoute: {{ $.ClientRoute }},
+  {{- if $.Page.LayoutPath }}
+  LayoutView,
+  {{- end }}
+  {{- if $.Page.ErrorPath }}
+  ErrorView,
   {{- end }}
 }
 
-export function render(pathProps: PathProps) {
-  return renderHtml(page, pathProps)
+export function render(props) {
+  return renderHtml(page, props)
 }

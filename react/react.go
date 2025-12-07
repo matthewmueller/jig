@@ -16,10 +16,21 @@ import (
 	"github.com/matthewmueller/views/internal/esbuild"
 	"github.com/matthewmueller/views/internal/goja"
 	"github.com/matthewmueller/views/internal/gotext"
+	"github.com/matthewmueller/views/internal/pages"
 	"golang.org/x/sync/errgroup"
 )
 
 func New(log *slog.Logger) *Viewer {
+	defines := map[string]string{}
+	cache := false
+	minify := false
+	liveRoute := "/.live"
+	if isProduction() {
+		defines["process.env.NODE_ENV"] = "\"production\""
+		cache = true
+		minify = true
+		liveRoute = ""
+	}
 	return &Viewer{
 		log,
 		goja.New(log),
@@ -27,13 +38,16 @@ func New(log *slog.Logger) *Viewer {
 		&serveCache{},
 		".",
 		nil,
-		!isGoRun(),
+		cache,
 		"dist",
-		false,
-		"/.live",
-		true,
+		minify,
+		liveRoute,
+		defines,
+		pages.Find,
 	}
 }
+
+type Page = pages.Page
 
 type Viewer struct {
 	log         *slog.Logger
@@ -46,7 +60,8 @@ type Viewer struct {
 	OutDir      string
 	Minify      bool
 	LiveRoute   string
-	Hydrate     bool
+	Defines     map[string]string
+	FindPages   func(dir string, entries ...string) ([]*Page, error)
 }
 
 //go:embed inject.js
@@ -61,36 +76,34 @@ var ssrEntryTemplate = gotext.MustCompile("ssr_entry.tsx.gotext", ssrEntryCode)
 var ssrRuntimeCode string
 
 type ssrEntryData struct {
-	Content     string
-	Layout      string
-	Error       string
-	Frames      []string
-	LiveRoute   string
-	ClientRoute string
+	Page      *Page
+	LiveRoute string
 }
 
-func (v *Viewer) TransformSSR(paths ...string) error {
+func (v *Viewer) transformSSR(paths ...string) error {
 	eg := new(errgroup.Group)
-	for _, path := range paths {
-		eg.Go(func() error {
-			return v.transformSSR(path)
-		})
-	}
-	return eg.Wait()
-}
-
-func (v *Viewer) transformSSR(path string) error {
 	absDir, err := filepath.Abs(v.Dir)
 	if err != nil {
 		return fmt.Errorf("react: unable to get absolute path: %w", err)
 	}
+	pages, err := v.FindPages(absDir, paths...)
+	if err != nil {
+		return fmt.Errorf("react: unable to find pages: %w", err)
+	}
+	pageMap := make(map[string]*Page)
+	for _, page := range pages {
+		pageMap[page.EntryPath] = page
+	}
 	plugins := []esbuild.Plugin{
 		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
-			path := strings.TrimPrefix(args.Path, "entry:")
+			entryPath := strings.TrimPrefix(args.Path, "entry:")
+			page, ok := pageMap[entryPath]
+			if !ok {
+				return esbuild.OnLoadResult{}, fmt.Errorf("react: no page found for entry %q", entryPath)
+			}
 			contents, err := ssrEntryTemplate.Render(ssrEntryData{
-				EntryPath: path,
+				Page:      page,
 				LiveRoute: v.LiveRoute,
-				Hydrate:   v.Hydrate,
 			})
 			if err != nil {
 				return esbuild.OnLoadResult{}, fmt.Errorf("react: failed to render ssr entry template: %w", err)
@@ -117,18 +130,27 @@ func (v *Viewer) transformSSR(path string) error {
 		}),
 	}
 
+	for _, page := range pages {
+		eg.Go(func() error {
+			return v.transformPageSSR(plugins, absDir, page)
+		})
+	}
+	return eg.Wait()
+}
+
+func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, page *Page) error {
 	// Build the file
 	result, err := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: []esbuild.EntryPoint{
 			{
-				InputPath:  "entry:" + path,
-				OutputPath: path,
+				InputPath:  "entry:" + page.EntryPath,
+				OutputPath: page.EntryPath,
 			},
 		},
 		AbsWorkingDir:     absDir,
 		Bundle:            true,
 		Splitting:         false,
-		Outdir:            v.OutDir,
+		Outdir:            filepath.Join(v.OutDir, "ssr"),
 		Write:             true,
 		Format:            esbuild.FormatIIFE,
 		Target:            esbuild.ES2015,
@@ -136,13 +158,11 @@ func (v *Viewer) transformSSR(path string) error {
 		MinifyIdentifiers: v.Minify,
 		MinifySyntax:      v.Minify,
 		Platform:          esbuild.PlatformBrowser,
-		GlobalName:        fmt.Sprintf("__go_react__[%q]", path),
-		Define: map[string]string{
-			"process.env.NODE_ENV": "\"production\"",
-		},
-		JSX:     esbuild.JSXAutomatic,
-		Inject:  []string{"inject:inject.js"},
-		Plugins: plugins,
+		GlobalName:        fmt.Sprintf("__go_react__[%q]", page.EntryPath),
+		Define:            v.Defines,
+		JSX:               esbuild.JSXAutomatic,
+		Inject:            []string{"inject:inject.js"},
+		Plugins:           plugins,
 	})
 	if err != nil {
 		return fmt.Errorf("react: failed to bundle ssr: %w", err)
@@ -164,7 +184,7 @@ type domEntryData struct {
 	EntryPath string
 }
 
-func (v *Viewer) TransformDOM(paths ...string) error {
+func (v *Viewer) transformDOM(paths ...string) error {
 	absDir, err := filepath.Abs(v.Dir)
 	if err != nil {
 		return fmt.Errorf("react: unable to get absolute path: %w", err)
@@ -208,7 +228,7 @@ func (v *Viewer) TransformDOM(paths ...string) error {
 		AbsWorkingDir:       absDir,
 		Bundle:              true,
 		Splitting:           true,
-		Outdir:              v.OutDir,
+		Outdir:              filepath.Join(v.OutDir, "dom"),
 		Write:               true,
 		Format:              esbuild.FormatESModule,
 		Target:              esbuild.ES2015,
@@ -216,13 +236,10 @@ func (v *Viewer) TransformDOM(paths ...string) error {
 		MinifyIdentifiers:   v.Minify,
 		MinifySyntax:        v.Minify,
 		Platform:            esbuild.PlatformBrowser,
-		// GlobalName:          `__go_react__`,
-		Define: map[string]string{
-			"process.env.NODE_ENV": "\"production\"",
-		},
-		JSX:     esbuild.JSXAutomatic,
-		Inject:  []string{"inject:inject.js"},
-		Plugins: plugins,
+		Define:              v.Defines,
+		JSX:                 esbuild.JSXAutomatic,
+		Inject:              []string{"inject:inject.js"},
+		Plugins:             plugins,
 	})
 	if err != nil {
 		return fmt.Errorf("react: failed to bundle ssr: %w", err)
@@ -254,10 +271,10 @@ func getRenderFunction(vm *goja.Runtime, path string) (goja.Callable, error) {
 }
 
 func (v *Viewer) Build(paths ...string) error {
-	if err := v.TransformSSR(paths...); err != nil {
+	if err := v.transformSSR(paths...); err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
-	if err := v.TransformDOM(paths...); err != nil {
+	if err := v.transformDOM(paths...); err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
 	return nil
@@ -285,7 +302,7 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 				// embedded filesystem present. Often a static filesystem will be passed in
 				// during development but we still want the current version of the code.
 				if !v.Cache || distfs == nil {
-					if err := v.TransformDOM(path); err != nil {
+					if err := v.transformDOM(path); err != nil {
 						if errors.Is(err, fs.ErrNotExist) {
 							next.ServeHTTP(w, r)
 							return
@@ -298,7 +315,7 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 				}
 
 				// Read the code
-				transformedCode, err := fs.ReadFile(distfs, gopath.Join(v.OutDir, path+".js"))
+				transformedCode, err := fs.ReadFile(distfs, gopath.Join(v.OutDir, "dom", path+".js"))
 				if err != nil {
 					httpJsError(w, "react: failed to read dom file: %s", err.Error())
 					return
@@ -319,43 +336,34 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 	}
 }
 
-type View struct {
-	Path  string
-	Props any
-}
+// type View struct {
+// 	Path  string
+// 	Props any
+// }
 
-func (v *Viewer) Layout(path string, props any) *Renderer {
-	return &Renderer{v, &View{path, props}}
-}
+// func (v *Viewer) Layout(path string, props any) *Renderer {
+// 	return &Renderer{v, &View{path, props}}
+// }
 
-type Renderer struct {
-	v      *Viewer
-	layout *View
-}
+// type Renderer struct {
+// 	v      *Viewer
+// 	layout *View
+// }
+
+// func (v *Viewer) Render(w io.Writer, path string, props any) error {
+// 	renderer := &Renderer{v, nil}
+// 	return renderer.Render(w, path, props)
+// }
 
 func (v *Viewer) Render(w io.Writer, path string, props any) error {
-	renderer := &Renderer{v, nil}
-	return renderer.Render(w, path, props)
-}
-
-func (r *Renderer) Render(w io.Writer, path string, props any) error {
-	vm := r.v.pool.Acquire()
-	defer r.v.pool.Release(vm)
+	vm := v.pool.Acquire()
+	defer v.pool.Release(vm)
 
 	// Render page
-	page, err := r.render(vm, path, props)
+	page, err := v.render(vm, path, props)
 	if err != nil {
 		return fmt.Errorf("react: unable to render page %q: %w", path, err)
 	}
-
-	// If there's a layout, render the layout
-	// if r.layout != nil {
-	// 	layout, err := r.render(vm, path, props)
-	// 	if err != nil {
-	// 		return fmt.Errorf("react: unable to render page %q: %w", path, err)
-	// 	}
-	// }
-	// fmt.Println("Rendering", r.layout.Path)
 
 	// Write the result
 	_, err = io.WriteString(w, page)
@@ -366,22 +374,22 @@ func (r *Renderer) Render(w io.Writer, path string, props any) error {
 	return nil
 }
 
-func (r *Renderer) render(vm *goja.Runtime, path string, props any) (string, error) {
-	render, ok := r.v.renderCache.Get(path)
+func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error) {
+	render, ok := v.renderCache.Get(path)
 	if !ok {
-		distfs := r.v.FS
+		distfs := v.FS
 		// Transform the live path when we're not caching or when there's no
 		// embedded filesystem present. Often a static filesystem will be passed in
 		// during development but we still want the current version of the code.
-		if !r.v.Cache || distfs == nil {
-			if err := r.v.TransformSSR(path); err != nil {
+		if !v.Cache || distfs == nil {
+			if err := v.transformSSR(path); err != nil {
 				return "", fmt.Errorf("react: failed to transform for ssr: %w", err)
 			}
-			distfs = os.DirFS(r.v.Dir)
+			distfs = os.DirFS(v.Dir)
 		}
 
 		// Read the code
-		code, err := fs.ReadFile(distfs, gopath.Join(r.v.OutDir, path+".js"))
+		code, err := fs.ReadFile(distfs, gopath.Join(v.OutDir, "ssr", path+".js"))
 		if err != nil {
 			return "", fmt.Errorf("react: failed to read ssr file: %w", err)
 		}
@@ -398,18 +406,30 @@ func (r *Renderer) render(vm *goja.Runtime, path string, props any) (string, err
 		}
 
 		// Cache the render function when we're using the static filesystem
-		if r.v.Cache {
-			r.v.renderCache.Set(path, render)
+		if v.Cache {
+			v.renderCache.Set(path, render)
 		}
 	}
 
 	// Call the render function
-	result, err := render(goja.Undefined(), vm.ToValue(path), vm.ToValue(props))
+	result, err := render(goja.Undefined(), vm.ToValue(props))
 	if err != nil {
 		return "", fmt.Errorf("react: unable to render the component: %w", err)
 	}
 
 	return result.String(), nil
+}
+
+func (v *Viewer) serveLiveRoute(w http.ResponseWriter, r *http.Request) {
+	httpJsError(w, "react: livereload not implemented yet")
+}
+
+func isProduction() bool {
+	env, ok := os.LookupEnv("NODE_ENV")
+	if ok {
+		return strings.ToLower(env) == "production"
+	}
+	return !isGoRun()
 }
 
 // Returns true if the current executable is being run via `go run` or `go test`
@@ -423,10 +443,6 @@ func isGoRun() bool {
 	}
 	// Otherwise, trap interrupts by default
 	return false
-}
-
-func (v *Viewer) serveLiveRoute(w http.ResponseWriter, r *http.Request) {
-	httpJsError(w, "react: livereload not implemented yet")
 }
 
 func httpJsError(w http.ResponseWriter, format string, a ...any) {
