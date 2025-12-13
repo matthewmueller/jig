@@ -61,7 +61,7 @@ type Viewer struct {
 	Minify      bool
 	LiveRoute   string
 	Defines     map[string]string
-	FindPages   func(dir string, entries ...string) ([]*Page, error)
+	Finder      func(dir string, entries ...string) ([]*Page, error)
 }
 
 //go:embed inject.js
@@ -86,7 +86,7 @@ func (v *Viewer) transformSSR(paths ...string) error {
 	if err != nil {
 		return fmt.Errorf("react: unable to get absolute path: %w", err)
 	}
-	pages, err := v.FindPages(absDir, paths...)
+	pages, err := v.Finder(absDir, paths...)
 	if err != nil {
 		return fmt.Errorf("react: unable to find pages: %w", err)
 	}
@@ -128,6 +128,7 @@ func (v *Viewer) transformSSR(paths ...string) error {
 				ResolveDir: absDir,
 			}, nil
 		}),
+		esbuild.JSX("runtime:ssr_runtime.tsx"),
 	}
 
 	for _, page := range pages {
@@ -180,6 +181,9 @@ var domEntryCode string
 
 var domEntryTemplate = gotext.MustCompile("dom_entry.jsx.gotext", domEntryCode)
 
+//go:embed dom_runtime.tsx
+var domRuntimeCode string
+
 type domEntryData struct {
 	EntryPath string
 }
@@ -211,6 +215,14 @@ func (v *Viewer) transformDOM(paths ...string) error {
 				ResolveDir: absDir,
 			}, nil
 		}),
+		esbuild.Virtual(`^runtime:dom_runtime.tsx$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
+			return esbuild.OnLoadResult{
+				Loader:     esbuild.LoaderTSX,
+				Contents:   &domRuntimeCode,
+				ResolveDir: absDir,
+			}, nil
+		}),
+		esbuild.JSX("runtime:dom_runtime.tsx"),
 	}
 
 	// Prepare the entrypoints
@@ -335,25 +347,6 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 		})
 	}
 }
-
-// type View struct {
-// 	Path  string
-// 	Props any
-// }
-
-// func (v *Viewer) Layout(path string, props any) *Renderer {
-// 	return &Renderer{v, &View{path, props}}
-// }
-
-// type Renderer struct {
-// 	v      *Viewer
-// 	layout *View
-// }
-
-// func (v *Viewer) Render(w io.Writer, path string, props any) error {
-// 	renderer := &Renderer{v, nil}
-// 	return renderer.Render(w, path, props)
-// }
 
 func (v *Viewer) Render(w io.Writer, path string, props any) error {
 	vm := v.pool.Acquire()

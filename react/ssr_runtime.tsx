@@ -1,4 +1,16 @@
-import { ComponentType, createContext, JSX, Fragment, ReactNode } from "react"
+import {
+  ComponentType,
+  createContext,
+  JSX,
+  Fragment,
+  ReactNode,
+  ReactElement,
+  Component,
+  ContextType,
+  Children,
+  PropsWithChildren,
+  isValidElement,
+} from "react"
 import { renderToString } from "react-dom/server"
 
 type Context = {
@@ -156,4 +168,53 @@ export function renderHtml(page: Page, props: unknown): string {
     return renderError(page, context, html)
   }
   return `<!doctype html>` + html
+}
+
+export class Head extends Component<PropsWithChildren> {
+  static contextType = Context
+  declare context: ContextType<typeof Context>
+
+  // Value meta types
+  // See: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta
+  // TODO: dedupe with client
+  private headSelector(node: ReactElement): string | void {
+    switch (node.type) {
+      case "title":
+        return "title"
+      case "base":
+        return "base"
+      case "link":
+        if (!node.props || typeof node.props !== "object") {
+          return
+        }
+        if ("href" in node.props) {
+          return `link[href="${node.props.href}"]`
+        }
+      case "meta":
+        if (!node.props || typeof node.props !== "object") {
+          return
+        }
+        if ("name" in node.props) {
+          return `meta[name="${node.props.name}"]`
+        } else if ("http-equiv" in node.props) {
+          return `meta[http-equiv="${node.props["http-equiv"]}"]`
+        } else if ("charSet" in node.props) {
+          return `meta[charset]`
+        }
+    }
+  }
+
+  render() {
+    Children.forEach(this.props.children, (child) => {
+      if (!isValidElement(child)) {
+        return
+      }
+      const id = this.headSelector(child)
+      if (!id) {
+        return
+      }
+      this.context.heads[id] = child
+    })
+    return null
+  }
 }

@@ -1,6 +1,5 @@
 import { createRoot } from "react-dom/client";
 import Entry from "./{{ .EntryPath }}";
-import { StrictMode } from 'react';
 
 function tryParse(el) {
   try {
@@ -13,4 +12,4 @@ function tryParse(el) {
 
 const props = tryParse(document.getElementById("react-props"))
 const root = createRoot(document.getElementById("root") || document.body)
-root.render(<StrictMode><Entry {...props} /></StrictMode>)
+root.render(<Entry {...props} />)

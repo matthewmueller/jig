@@ -8,6 +8,14 @@ export default function Index(props: Props) {
   const [count, setCount] = React.useState(0)
   return (
     <main>
+      <head>
+        <title>Hello world</title>
+        <meta charSet="UTF-8" />
+        <meta name="cool" content={"story"} />
+        {typeof window === "undefined" ? null : (
+          <meta name="browser" content={"only"} />
+        )}
+      </head>
       <h1>Hello, {props.name}!</h1>
       <p>Count: {count}</p>
       <button onClick={() => setCount(count + 1)}>Increment</button>

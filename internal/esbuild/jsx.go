@@ -6,19 +6,9 @@ import (
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/matthewmueller/jsx"
-	"github.com/matthewmueller/jsx/ast"
 	"github.com/matthewmueller/views/internal/head"
 	"github.com/matthewmueller/views/internal/styledjsx"
 )
-
-type Rewriter interface {
-	Rewrite(path string, script *ast.Script) error
-}
-
-// TODO: implement JSX2
-func JSX2(rewriters ...Rewriter) esbuild.Plugin {
-	return esbuild.Plugin{}
-}
 
 func JSX(runtime string) esbuild.Plugin {
 	transformFile := func(ext string, loader esbuild.Loader) func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
