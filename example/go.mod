@@ -25,7 +25,7 @@ require (
 	github.com/matthewmueller/enroute v0.1.0 // indirect
 	github.com/matthewmueller/glob v0.1.1 // indirect
 	github.com/matthewmueller/jsx v0.0.11 // indirect
-	github.com/matthewmueller/styledjsx v0.0.7 // indirect
+	github.com/matthewmueller/styledjsx v0.0.11 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect

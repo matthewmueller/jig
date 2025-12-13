@@ -218,3 +218,14 @@ export class Head extends Component<PropsWithChildren> {
     return null
   }
 }
+
+export class Style extends Component<PropsWithChildren<{ id: string }>> {
+  static contextType = Context
+  declare context: ContextType<typeof Context>
+
+  render() {
+    const style = Children.toArray(this.props.children).join("\n")
+    this.context.styles[this.props.id] = style
+    return null
+  }
+}

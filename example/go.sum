@@ -44,8 +44,8 @@ github.com/matthewmueller/jsx v0.0.11 h1:EeAtZpxd3ibPZlUOmme9T3FNUSt6wX2+DJcFAWG
 github.com/matthewmueller/jsx v0.0.11/go.mod h1:umuNMgnS0vCxX6407C5nDSXVmqeLH5hEO6ClJXi7j/4=
 github.com/matthewmueller/logs v0.0.8 h1:1FURUN44N5liK9HmoZWzDP6nK40EjNE7JLrGWe6VYfU=
 github.com/matthewmueller/logs v0.0.8/go.mod h1:L9kH2CVrUb6ERGMriShkQR2+kDHTa1OxbNRKbom1Jrc=
-github.com/matthewmueller/styledjsx v0.0.7 h1:BJ+iYfwuNMblUQ5NhKa/Ct9R8/9NlWG7OiUjBveDtNM=
-github.com/matthewmueller/styledjsx v0.0.7/go.mod h1:+cGZI3FhapYTULIst5EjlR+hTtfFPwGga9P5ExM2CPg=
+github.com/matthewmueller/styledjsx v0.0.11 h1:mgvBFZzCCe+c5/6xiD8g8xiivbrTTnxEzmvZ0AaWuxY=
+github.com/matthewmueller/styledjsx v0.0.11/go.mod h1:qehogGmE7cp1CtCCZWTAUAbK5V5Oy7FnfFRvvvaSpAk=
 github.com/matthewmueller/testchild v0.0.1 h1:llkDPWCc9I2pWwZ+tT3HWhWkv00RaF5+4Yn2/dLGT/Q=
 github.com/matthewmueller/testchild v0.0.1/go.mod h1:ZRwFgyiusaSAMlcuMFCU1NtZjs+o+QD7x/glsqXvB2Q=
 github.com/matthewmueller/virt v0.0.14 h1:1idhfdxT6EWJRPRqjySnztTjMHVW6SHwGhrhgKEe0XI=

@@ -12,7 +12,7 @@ require (
 	github.com/matthewmueller/glob v0.1.1
 	github.com/matthewmueller/jsx v0.0.11
 	github.com/matthewmueller/logs v0.0.8
-	github.com/matthewmueller/styledjsx v0.0.7
+	github.com/matthewmueller/styledjsx v0.0.11
 	github.com/matthewmueller/virt v0.0.14
 	golang.org/x/net v0.47.0
 	golang.org/x/sync v0.18.0

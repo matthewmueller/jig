@@ -3,6 +3,7 @@ package esbuild
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/matthewmueller/jsx"
@@ -25,8 +26,15 @@ func JSX(runtime string) esbuild.Plugin {
 			if err != nil {
 				return result, err
 			}
-			if err := styledjsx.Rewrite(args.Path, runtime, script); err != nil {
-				return result, err
+			// TODO: this is very hacky, hoist the conditional up
+			if strings.Contains(runtime, "ssr_runtime") {
+				if err := styledjsx.Rewrite(args.Path, runtime, script); err != nil {
+					return result, err
+				}
+			} else {
+				if err := styledjsx.Remove(args.Path, script); err != nil {
+					return result, err
+				}
 			}
 			if err := head.Rewrite(args.Path, runtime, script); err != nil {
 				return result, err
