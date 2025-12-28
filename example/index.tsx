@@ -1,11 +1,11 @@
-import React from "react"
+import React from "react";
 
 export type Props = {
-  name: string
-}
+  name: string;
+};
 
 export default function Index(props: Props) {
-  const [count, setCount] = React.useState(0)
+  const [count, setCount] = React.useState(0);
   return (
     <main>
       <head>
@@ -16,20 +16,20 @@ export default function Index(props: Props) {
           <meta name="browser" content={"only"} />
         )}
       </head>
-      <h1>Hello, {props.name}!</h1>
+      <h1>Hello, {props.name}!!</h1>
       <Header2 />
       <p>Count: {count}</p>
       <button onClick={() => setCount(count + 1)}>Increment</button>
       <style jsx>{`
         h1,
         h2 {
-          color: blue;
+          color: green;
         }
       `}</style>
     </main>
-  )
+  );
 }
 
 function Header2() {
-  return <h2>This is a header 2</h2>
+  return <h2>This is a header 2</h2>;
 }

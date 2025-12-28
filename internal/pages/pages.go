@@ -4,15 +4,49 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
-type Page struct {
-	EntryPath  string
-	LayoutPath string
-	ErrorPath  string
+type Index struct {
+	mu    sync.RWMutex
+	pages map[string]*Page
 }
 
-func Find(dir string, entries ...string) (pages []*Page, err error) {
+func (i *Index) Get(entry string) (*Page, bool) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	if page, ok := i.pages[entry]; ok {
+		return page, true
+	}
+	return nil, false
+}
+
+func (i *Index) Add(entry string, page *Page) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.pages[entry] = page
+}
+
+func (i *Index) List() []*Page {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	var pages []*Page
+	for _, page := range i.pages {
+		pages = append(pages, page)
+	}
+	return pages
+}
+
+type Page struct {
+	Entry  string
+	Layout string
+	Error  string
+}
+
+func Find(dir string, entries ...string) (index *Index, err error) {
+	index = &Index{
+		pages: make(map[string]*Page),
+	}
 	// TODO: async
 	for _, entry := range entries {
 		switch extless(filepath.Base(entry)) {
@@ -23,9 +57,9 @@ func Find(dir string, entries ...string) (pages []*Page, err error) {
 		if err != nil {
 			return nil, err
 		}
-		pages = append(pages, page)
+		index.Add(entry, page)
 	}
-	return pages, nil
+	return index, nil
 }
 
 func extless(base string) string {
@@ -38,7 +72,7 @@ func find(root, dir, entry string) (*Page, error) {
 		return nil, err
 	}
 	page := &Page{
-		EntryPath: entry,
+		Entry: entry,
 	}
 	entryExt := filepath.Ext(entry)
 next:
@@ -54,13 +88,13 @@ next:
 		}
 		switch extless(name) {
 		case "layout":
-			page.LayoutPath = filepath.Join(dir, name)
+			page.Layout = filepath.Join(dir, name)
 		case "error":
-			page.ErrorPath = filepath.Join(dir, name)
+			page.Error = filepath.Join(dir, name)
 		}
 	}
 	// Exit if we've reached the root or filled both layout and error
-	if dir == "." || (page.ErrorPath != "" && page.LayoutPath != "") {
+	if dir == "." || (page.Error != "" && page.Layout != "") {
 		return page, nil
 	}
 	// Recurse

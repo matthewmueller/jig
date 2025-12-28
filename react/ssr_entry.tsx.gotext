@@ -1,26 +1,23 @@
 "use strict"
 
 import { Page, renderHtml } from "runtime:ssr_runtime.tsx"
-import EntryView from "./{{ $.Page.EntryPath }}"
+import EntryView from "./{{ $.Page.Entry }}"
 
-{{- if $.Page.LayoutPath }}
-import LayoutView from "./{{ $.Page.LayoutPath }}"
+{{- if $.Page.Layout }}
+import LayoutView from "./{{ $.Page.Layout }}"
 {{- end }}
 
-{{- if $.Page.ErrorPath }}
-import ErrorView from "./{{ $.Page.ErrorPath }}"
+{{- if $.Page.Error }}
+import ErrorView from "./{{ $.Page.Error }}"
 {{- end }}
 
 const page: Page = {
   EntryView,
-  clientRoute: "/{{ $.Page.EntryPath }}.js",
-  {{- if $.LiveRoute }}
-  liveRoute: "{{ $.LiveRoute }}",
-  {{- end }}
-  {{- if $.Page.LayoutPath }}
+  clientRoute: "/{{ $.Page.Entry }}.js",
+  {{- if $.Page.Layout }}
   LayoutView,
   {{- end }}
-  {{- if $.Page.ErrorPath }}
+  {{- if $.Page.Error }}
   ErrorView,
   {{- end }}
 }

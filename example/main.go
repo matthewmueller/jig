@@ -3,7 +3,9 @@ package main
 import (
 	"embed"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/livebud/mux"
@@ -18,16 +20,29 @@ var distfs embed.FS
 
 func main() {
 	log := logs.Default()
-	react := react.New(log)
-	react.FS = distfs
+	if err := run(log); err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+}
+
+func run(log *slog.Logger) error {
+	viewer, err := react.Load(
+		react.WithFS(distfs),
+		react.WithLog(log),
+	)
+	if err != nil {
+		return err
+	}
+	defer viewer.Close()
 	router := mux.New()
-	router.Use(react.Middleware())
+	router.Use(viewer.Middleware())
 	router.Get("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := react.Render(w, "index.tsx", map[string]any{
+		if err := viewer.Render(w, "index.tsx", map[string]any{
 			"name": "Matt",
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -38,7 +53,7 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := react.Render(w, "dashboard/dashboard.tsx", map[string]any{
+		if err := viewer.Render(w, "dashboard/dashboard.tsx", map[string]any{
 			"name": "Matt",
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -49,12 +64,10 @@ func main() {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		react.Render(w, "about.tsx", map[string]any{
+		viewer.Render(w, "about.tsx", map[string]any{
 			"name": "Max",
 		})
 	}))
 	fmt.Println("Listening on http://localhost:8000")
-	if err := http.ListenAndServe(":8000", router); err != nil {
-		log.Error(err.Error())
-	}
+	return http.ListenAndServe(":8000", router)
 }

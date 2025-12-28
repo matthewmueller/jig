@@ -3,10 +3,14 @@ module github.com/matthewmueller/views
 go 1.24.4
 
 require (
+	github.com/PuerkitoBio/goquery v1.11.0
+	github.com/bep/debounce v1.2.1
 	github.com/dop251/goja v0.0.0-20251121114222-56b1242a5f86
 	github.com/evanw/esbuild v0.27.0
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/livebud/cli v0.0.22
 	github.com/livebud/npm v0.1.0
+	github.com/livebud/sse v0.0.5
 	github.com/matryer/is v1.4.1
 	github.com/matthewmueller/diff v0.0.3
 	github.com/matthewmueller/glob v0.1.1
@@ -14,12 +18,14 @@ require (
 	github.com/matthewmueller/logs v0.0.8
 	github.com/matthewmueller/styledjsx v0.0.11
 	github.com/matthewmueller/virt v0.0.14
+	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	golang.org/x/net v0.47.0
 	golang.org/x/sync v0.18.0
 )
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect

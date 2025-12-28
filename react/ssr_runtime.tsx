@@ -1,3 +1,4 @@
+import React from "react";
 import {
   ComponentType,
   createContext,
@@ -10,33 +11,32 @@ import {
   Children,
   PropsWithChildren,
   isValidElement,
-} from "react"
-import { renderToString } from "react-dom/server"
+} from "react";
+import { renderToString } from "react-dom/server";
 
 type Context = {
-  styles: Record<string, string>
-  heads: Record<string, JSX.Element>
-}
+  styles: Record<string, string>;
+  heads: Record<string, JSX.Element>;
+};
 
 const Context = createContext<Context>({
   styles: {},
   heads: {},
-})
+});
 
 export type Page = {
-  LayoutView?: ComponentType<any>
-  ErrorView?: ComponentType<any>
-  EntryView: ComponentType<any>
-  clientRoute?: string
-  liveRoute?: string
-}
+  LayoutView?: ComponentType<any>;
+  ErrorView?: ComponentType<any>;
+  EntryView: ComponentType<any>;
+  clientRoute?: string;
+};
 
-export type PathProps = Record<string, unknown>
+export type PathProps = Record<string, unknown>;
 
 type LayoutProps = {
-  head: JSX.Element
-  children: React.ReactNode
-}
+  head: JSX.Element;
+  children: React.ReactNode;
+};
 
 function defaultLayout(props: LayoutProps) {
   return (
@@ -44,46 +44,43 @@ function defaultLayout(props: LayoutProps) {
       <head>{props.head}</head>
       <body>{props.children}</body>
     </html>
-  )
+  );
 }
 
 type ErrorProps = {
-  error: Error
-}
+  error: Error;
+};
 
 function defaultError(props: ErrorProps) {
-  return <div>An error occurred: {props.error.message}</div>
+  return <div>An error occurred: {props.error.message}</div>;
 }
 
 function renderToHtml(element: ReactNode): string | Error {
   try {
-    return renderToString(element)
+    return renderToString(element);
   } catch (err) {
     // TODO: make error if not already
-    return err as Error
+    return err as Error;
   }
 }
 
 function renderError(page: Page, context: Context, error: Error): string {
-  let { LayoutView, ErrorView, liveRoute } = page
-  ErrorView = ErrorView || defaultError
+  let { LayoutView, ErrorView } = page;
+  ErrorView = ErrorView || defaultError;
   let contentHtml = renderToHtml(
     <Context.Provider value={context}>
       <ErrorView error={error} />
-    </Context.Provider>
-  )
+    </Context.Provider>,
+  );
   if (contentHtml instanceof Error) {
     // Try again with the default error handler
-    page.ErrorView = defaultError
-    return renderError(page, context, contentHtml)
+    page.ErrorView = defaultError;
+    return renderError(page, context, contentHtml);
   }
   // TODO: we can probably dedupe some of this
-  const heads: JSX.Element[] = []
-  if (liveRoute) {
-    heads.push(<script key={liveRoute} async type="module" src={liveRoute} />)
-  }
+  const heads: JSX.Element[] = [];
   for (let key in context.heads) {
-    heads.push(context.heads[key])
+    heads.push(context.heads[key]);
   }
   for (let id in context.styles) {
     heads.push(
@@ -91,54 +88,51 @@ function renderError(page: Page, context: Context, error: Error): string {
         key={id}
         id={id}
         dangerouslySetInnerHTML={{ __html: context.styles[id] }}
-      />
-    )
+      />,
+    );
   }
-  LayoutView = LayoutView || defaultLayout
+  LayoutView = LayoutView || defaultLayout;
   let html = renderToHtml(
     <LayoutView head={<Fragment>{heads}</Fragment>}>
       <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
-    </LayoutView>
-  )
+    </LayoutView>,
+  );
   if (html instanceof Error) {
-    page.LayoutView = defaultLayout
-    return renderError(page, context, html)
+    page.LayoutView = defaultLayout;
+    return renderError(page, context, html);
   }
-  return `<!doctype html>` + html
+  return `<!doctype html>` + html;
 }
 
 export function renderHtml(page: Page, props: unknown): string {
-  let { LayoutView, EntryView, clientRoute, liveRoute } = page
+  let { LayoutView, EntryView, clientRoute } = page;
   const context: Context = {
     styles: {},
     heads: {},
-  }
+  };
   if (typeof props !== "object") {
     return renderError(
       page,
       context,
-      new Error("react: props must be an object")
-    )
+      new Error("react: props must be an object"),
+    );
   }
   let contentHtml = renderToHtml(
     <Context.Provider value={context}>
       <EntryView {...props} />
-    </Context.Provider>
-  )
+    </Context.Provider>,
+  );
   if (contentHtml instanceof Error) {
-    return renderError(page, context, contentHtml)
+    return renderError(page, context, contentHtml);
   }
-  const heads: JSX.Element[] = []
-  if (liveRoute) {
-    heads.push(<script key={liveRoute} async type="module" src={liveRoute} />)
-  }
+  const heads: JSX.Element[] = [];
   if (clientRoute) {
     heads.push(
-      <script key={clientRoute} defer type="module" src={clientRoute} />
-    )
+      <script key={clientRoute} defer type="module" src={clientRoute} />,
+    );
   }
   for (let key in context.heads) {
-    heads.push(context.heads[key])
+    heads.push(context.heads[key]);
   }
   for (let id in context.styles) {
     heads.push(
@@ -146,10 +140,10 @@ export function renderHtml(page: Page, props: unknown): string {
         key={id}
         id={id}
         dangerouslySetInnerHTML={{ __html: context.styles[id] }}
-      />
-    )
+      />,
+    );
   }
-  LayoutView = LayoutView || defaultLayout
+  LayoutView = LayoutView || defaultLayout;
   let html = renderToHtml(
     <LayoutView head={<Fragment>{heads}</Fragment>}>
       <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
@@ -161,18 +155,18 @@ export function renderHtml(page: Page, props: unknown): string {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(props) }}
         ></script>
       )}
-    </LayoutView>
-  )
+    </LayoutView>,
+  );
   // TODO: dedupe with above
   if (html instanceof Error) {
-    return renderError(page, context, html)
+    return renderError(page, context, html);
   }
-  return `<!doctype html>` + html
+  return `<!doctype html>` + html;
 }
 
 export class Head extends Component<PropsWithChildren> {
-  static contextType = Context
-  declare context: ContextType<typeof Context>
+  static contextType = Context;
+  declare context: ContextType<typeof Context>;
 
   // Value meta types
   // See: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta
@@ -180,26 +174,26 @@ export class Head extends Component<PropsWithChildren> {
   private headSelector(node: ReactElement): string | void {
     switch (node.type) {
       case "title":
-        return "title"
+        return "title";
       case "base":
-        return "base"
+        return "base";
       case "link":
         if (!node.props || typeof node.props !== "object") {
-          return
+          return;
         }
         if ("href" in node.props) {
-          return `link[href="${node.props.href}"]`
+          return `link[href="${node.props.href}"]`;
         }
       case "meta":
         if (!node.props || typeof node.props !== "object") {
-          return
+          return;
         }
         if ("name" in node.props) {
-          return `meta[name="${node.props.name}"]`
+          return `meta[name="${node.props.name}"]`;
         } else if ("http-equiv" in node.props) {
-          return `meta[http-equiv="${node.props["http-equiv"]}"]`
+          return `meta[http-equiv="${node.props["http-equiv"]}"]`;
         } else if ("charSet" in node.props) {
-          return `meta[charset]`
+          return `meta[charset]`;
         }
     }
   }
@@ -207,25 +201,25 @@ export class Head extends Component<PropsWithChildren> {
   render() {
     Children.forEach(this.props.children, (child) => {
       if (!isValidElement(child)) {
-        return
+        return;
       }
-      const id = this.headSelector(child)
+      const id = this.headSelector(child);
       if (!id) {
-        return
+        return;
       }
-      this.context.heads[id] = child
-    })
-    return null
+      this.context.heads[id] = child;
+    });
+    return null;
   }
 }
 
 export class Style extends Component<PropsWithChildren<{ id: string }>> {
-  static contextType = Context
-  declare context: ContextType<typeof Context>
+  static contextType = Context;
+  declare context: ContextType<typeof Context>;
 
   render() {
-    const style = Children.toArray(this.props.children).join("\n")
-    this.context.styles[this.props.id] = style
-    return null
+    const style = Children.toArray(this.props.children).join("\n");
+    this.context.styles[this.props.id] = style;
+    return null;
   }
 }

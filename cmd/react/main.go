@@ -28,15 +28,17 @@ func run(ctx context.Context, log *slog.Logger, args ...string) error {
 	cli := cli.New("react", "Build React pages")
 	cmd := &command{log: log}
 	cli.Flag("dir", "The working directory").Short('C').String(&cmd.Dir).Default(".")
+	cli.Flag("minify", "Minify the react code").Short('m').Bool(&cmd.Minify).Default(true)
 	cli.Args("paths", "paths to React files").Strings(&cmd.Paths)
 	cli.Run(cmd.Run)
 	return cli.Parse(ctx, args...)
 }
 
 type command struct {
-	log   *slog.Logger
-	Dir   string
-	Paths []string
+	log    *slog.Logger
+	Dir    string
+	Minify bool
+	Paths  []string
 }
 
 func (c *command) Run(ctx context.Context) error {
@@ -58,12 +60,16 @@ func (c *command) Run(ctx context.Context) error {
 			return fmt.Errorf("react: path %q is outside of the root directory %q", path, dir)
 		}
 	}
-	react := react.New(c.log)
-	react.Dir = dir
-	// TODO: smarter production detection (flip the default)
-	react.Minify = true
-	react.LiveRoute = ""
-	if err := react.Build(paths...); err != nil {
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithMinify(c.Minify),
+		react.WithWatch(false),
+	)
+	if err != nil {
+		return err
+	}
+	defer viewer.Close()
+	if err := viewer.Build(paths...); err != nil {
 		return err
 	}
 	return nil

@@ -1,16 +1,16 @@
-import React from "react"
+import React from "react";
 
 export type Props = {
-  name: string
-}
+  name: string;
+};
 
 export default function Dashboard(props: Props) {
-  const [count, setCount] = React.useState(0)
+  const [count, setCount] = React.useState(0);
   return (
     <main>
-      <h1>Welcome to the Dashboard, {props.name}.</h1>
-      <p>Count: {count}</p>
+      <h1>Welcome to the Dashboard, {props.name}!</h1>
+      <p>Count: {count}!!!!!!</p>
       <button onClick={() => setCount(count + 1)}>Increment</button>
     </main>
-  )
+  );
 }
