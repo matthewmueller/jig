@@ -23,7 +23,7 @@ export default function Index(props: Props) {
       <style jsx>{`
         h1,
         h2 {
-          color: green;
+          color: orange;
         }
       `}</style>
     </main>

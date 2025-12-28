@@ -14,6 +14,7 @@ require (
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect
+	github.com/buildkite/terminal-to-html/v3 v3.16.8 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/dop251/goja v0.0.0-20251121114222-56b1242a5f86 // indirect
 	github.com/evanw/esbuild v0.27.0 // indirect

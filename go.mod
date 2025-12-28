@@ -5,6 +5,7 @@ go 1.24.4
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/bep/debounce v1.2.1
+	github.com/buildkite/terminal-to-html/v3 v3.16.8
 	github.com/dop251/goja v0.0.0-20251121114222-56b1242a5f86
 	github.com/evanw/esbuild v0.27.0
 	github.com/fsnotify/fsnotify v1.6.0
@@ -30,7 +31,7 @@ require (
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/hexops/valast v1.4.4 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect

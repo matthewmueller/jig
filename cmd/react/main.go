@@ -64,6 +64,7 @@ func (c *command) Run(ctx context.Context) error {
 		react.WithDir(dir),
 		react.WithMinify(c.Minify),
 		react.WithWatch(false),
+		react.WithLiveRoute(""),
 	)
 	if err != nil {
 		return err

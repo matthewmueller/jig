@@ -27,28 +27,6 @@ var (
 	ES2015          = api.ES2015
 )
 
-// func BuildAll(options BuildOptions) ([]OutputFile, *esmeta.File, error) {
-// 	result := api.Build(options)
-// 	if len(result.Errors) > 0 {
-// 		return nil, nil, &Error{result.Errors}
-// 	}
-// 	metafile, err := esmeta.Parse(result.Metafile)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-// 	return result.OutputFiles, metafile, nil
-// }
-
-// func BuildOne(options BuildOptions) (*OutputFile, error) {
-// 	result := api.Build(options)
-// 	if len(result.Errors) > 0 {
-// 		return nil, &Error{result.Errors}
-// 	} else if len(result.OutputFiles) == 0 {
-// 		return nil, errors.New("esbuild: no output files generated")
-// 	}
-// 	return &result.OutputFiles[0], nil
-// }
-
 func Build(options BuildOptions) (*BuildResult, error) {
 	result := api.Build(options)
 	if len(result.Errors) > 0 {
@@ -63,8 +41,9 @@ type Error struct {
 
 func (e *Error) Error() string {
 	errors := api.FormatMessages(e.messages, api.FormatMessagesOptions{
-		Color: false,
-		Kind:  api.ErrorMessage,
+		Color:         true,
+		Kind:          api.ErrorMessage,
+		TerminalWidth: 120,
 	})
 	return strings.Join(errors, "\n")
 }

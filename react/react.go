@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/buildkite/terminal-to-html/v3"
 	"github.com/matthewmueller/logs"
 	"github.com/matthewmueller/views/internal/esbuild"
 	"github.com/matthewmueller/views/internal/gitignore"
@@ -111,7 +113,6 @@ func defaults() *options {
 		Dir:       ".",
 		OutDir:    "dist",
 		FS:        nil,
-		LiveRoute: "/.live",
 		Env:       env,
 		Log:       logs.Default(),
 		FindPages: defaultFinder,
@@ -121,6 +122,7 @@ func defaults() *options {
 		opts.Cache = true
 		opts.Minify = true
 	} else {
+		opts.LiveRoute = "/.live"
 		opts.Watch = true
 		opts.Cache = false
 		opts.Minify = false
@@ -267,19 +269,19 @@ func (v *Viewer) transformSSR(absDir string, pages Pages) error {
 	eg := new(errgroup.Group)
 	for _, page := range pages.List() {
 		eg.Go(func() error {
-			return v.transformPageSSR(plugins, absDir, page)
+			return v.transformPageSSR(plugins, absDir, page.Entry)
 		})
 	}
 	return eg.Wait()
 }
 
-func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, page *Page) error {
+func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry string) error {
 	// Build the file
 	result, err := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: []esbuild.EntryPoint{
 			{
-				InputPath:  "entry:" + page.Entry,
-				OutputPath: page.Entry,
+				InputPath:  "entry:" + entry,
+				OutputPath: entry,
 			},
 		},
 		AbsWorkingDir:     absDir,
@@ -293,7 +295,7 @@ func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, page 
 		MinifyIdentifiers: v.options.Minify,
 		MinifySyntax:      v.options.Minify,
 		Platform:          esbuild.PlatformBrowser,
-		GlobalName:        fmt.Sprintf("__go_react__[%q]", page.Entry),
+		GlobalName:        fmt.Sprintf("__go_react__[%q]", entry),
 		Define:            v.options.Env,
 		JSX:               esbuild.JSXAutomatic,
 		Inject:            []string{"inject:inject.js"},
@@ -457,7 +459,7 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 					// TODO: not sure this is necessary for serving JS files...
 					pages, err := v.options.FindPages(v.options.Dir, path)
 					if err != nil {
-						httpJsError(w, "react: failed to find pages: %s", err.Error())
+						consoleError(w, "react: failed to find pages: %s", err.Error())
 						return
 					}
 					if err := v.transformDOM(v.options.Dir, pages); err != nil {
@@ -466,7 +468,7 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 							return
 						}
 						// TODO: javascript-friendly error message
-						httpJsError(w, "react: failed to transform for dom: %s", err.Error())
+						consoleError(w, "react: failed to transform for dom: %s", err.Error())
 						return
 					}
 					distfs = os.DirFS(v.options.Dir)
@@ -475,7 +477,7 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 				// Read the code
 				transformedCode, err := fs.ReadFile(distfs, gopath.Join(v.options.OutDir, "dom", path+".js"))
 				if err != nil {
-					httpJsError(w, "react: failed to read dom file: %s", err.Error())
+					consoleError(w, "react: failed to read dom file: %s", err.Error())
 					return
 				}
 
@@ -494,23 +496,22 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 	}
 }
 
-func (v *Viewer) Render(w io.Writer, path string, props any) error {
+func (v *Viewer) Render(w io.Writer, path string, props any) {
 	vm := v.pool.Acquire()
 	defer v.pool.Release(vm)
 
 	// Render page
 	html, err := v.render(vm, path, props)
 	if err != nil {
-		return fmt.Errorf("react: unable to render page %q: %w", path, err)
+		v.renderError(w, path, fmt.Errorf("react: unable to render page %q: %w", path, err))
+		return
 	}
 
 	// Write the result
-	_, err = io.WriteString(w, html)
-	if err != nil {
-		return fmt.Errorf("react: unable to write rendered output: %w", err)
+	if _, err = io.WriteString(w, html); err != nil {
+		v.options.Log.Error("react: unable to write rendered output", "err", err)
+		return
 	}
-
-	return nil
 }
 
 func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error) {
@@ -567,6 +568,52 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 	html := result.String()
 	html = v.liveReload.Rewrite(html)
 	return html, nil
+}
+
+var errorTemplate = template.Must(template.New("error.gohtml").Parse(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{{ $.Title }}</title>
+	<style>
+		body {
+			font-family: ui-monospace, Menlo, monospace;
+		}
+		pre {
+			white-space: pre-wrap;
+		}
+	</style>
+</head>
+<body>
+	<h1>{{ .Title }}</h1>
+	<pre id="error-message">{{ $.Error }}</pre>
+</body>
+</html>
+`))
+
+type errorData struct {
+	Title string
+	Error template.HTML
+}
+
+func (v *Viewer) renderError(w io.Writer, path string, err error) {
+	errorHtml := terminal.Render([]byte(err.Error()))
+	htmlBuffer := new(bytes.Buffer)
+	data := errorData{
+		Title: fmt.Sprintf("Unable to render %s", path),
+		Error: template.HTML(errorHtml),
+	}
+	if err := errorTemplate.Execute(htmlBuffer, data); err != nil {
+		v.options.Log.Error("react: unable to write render error page", "err", err)
+		return
+	}
+	html := v.liveReload.Rewrite(htmlBuffer.String())
+	if _, err = io.WriteString(w, html); err != nil {
+		v.options.Log.Error("react: unable to write rendered error page", "err", err)
+		return
+	}
 }
 
 func filterReloadEvents(events []watch.Event) (filtered []watch.Event) {
@@ -632,7 +679,7 @@ func isGoRun() bool {
 	return false
 }
 
-func httpJsError(w http.ResponseWriter, format string, a ...any) {
+func consoleError(w http.ResponseWriter, format string, a ...any) {
 	w.Header().Set("Content-Type", "application/javascript")
 	msg := fmt.Sprintf(format, a...)
 	js := fmt.Sprintf(`console.error(%q);`, msg)

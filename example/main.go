@@ -42,22 +42,18 @@ func run(log *slog.Logger) error {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := viewer.Render(w, "index.tsx", map[string]any{
+		viewer.Render(w, "index.tsx", map[string]any{
 			"name": "Matt",
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		})
 	}))
 	router.Get("/dashboard", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := viewer.Render(w, "dashboard/dashboard.tsx", map[string]any{
+		viewer.Render(w, "dashboard/dashboard.tsx", map[string]any{
 			"name": "Matt",
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		})
 	}))
 	router.Get("/about", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
