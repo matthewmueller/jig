@@ -190,8 +190,6 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 	return viewer, nil
 }
 
-var errClosed = errors.New("react: closed")
-
 func (v *Viewer) Close() (err error) {
 	err = errors.Join(err, v.watcher.Close())
 	err = errors.Join(err, v.eg.Wait())
@@ -203,6 +201,7 @@ type Page = pages.Page
 type Pages interface {
 	Get(entry string) (*Page, bool)
 	List() []*Page
+	Entries() []string
 }
 
 type Viewer struct {
@@ -324,7 +323,7 @@ type domEntryData struct {
 	Entry string
 }
 
-func (v *Viewer) transformDOM(absDir string, pages Pages) error {
+func (v *Viewer) transformDOM(absDir string, entries ...string) error {
 	plugins := []esbuild.Plugin{
 		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 			path := strings.TrimPrefix(args.Path, "entry:")
@@ -359,15 +358,13 @@ func (v *Viewer) transformDOM(absDir string, pages Pages) error {
 
 	// Prepare the entrypoints
 	var entrypoints []esbuild.EntryPoint
-	for _, page := range pages.List() {
+	for _, entry := range entries {
 		entrypoints = append(entrypoints, esbuild.EntryPoint{
-			InputPath:  "entry:" + page.Entry,
-			OutputPath: page.Entry,
+			InputPath:  "entry:" + entry,
+			OutputPath: entry,
 		})
 	}
-
-	// Build the file
-	result, err := esbuild.Build(esbuild.BuildOptions{
+	buildOptions := esbuild.BuildOptions{
 		EntryPointsAdvanced: entrypoints,
 		AbsWorkingDir:       absDir,
 		Bundle:              true,
@@ -375,7 +372,7 @@ func (v *Viewer) transformDOM(absDir string, pages Pages) error {
 		Outdir:              filepath.Join(v.options.OutDir, "dom"),
 		Write:               true,
 		Format:              esbuild.FormatESModule,
-		Target:              esbuild.ES2015,
+		Target:              esbuild.ES2023,
 		MinifyWhitespace:    v.options.Minify,
 		MinifyIdentifiers:   v.options.Minify,
 		MinifySyntax:        v.options.Minify,
@@ -426,7 +423,7 @@ func (v *Viewer) Build(paths ...string) error {
 	if err := v.transformSSR(absDir, pages); err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
-	if err := v.transformDOM(absDir, pages); err != nil {
+	if err := v.transformDOM(absDir, pages.Entries()...); err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
 	return nil
@@ -456,13 +453,7 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 				// embedded filesystem present. Often a static filesystem will be passed in
 				// during development but we still want the current version of the code.
 				if !v.options.Cache || distfs == nil {
-					// TODO: not sure this is necessary for serving JS files...
-					pages, err := v.options.FindPages(v.options.Dir, path)
-					if err != nil {
-						consoleError(w, "react: failed to find pages: %s", err.Error())
-						return
-					}
-					if err := v.transformDOM(v.options.Dir, pages); err != nil {
+					if err := v.transformDOM(v.options.Dir, path); err != nil {
 						if errors.Is(err, fs.ErrNotExist) {
 							next.ServeHTTP(w, r)
 							return

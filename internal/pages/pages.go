@@ -37,6 +37,16 @@ func (i *Index) List() []*Page {
 	return pages
 }
 
+func (i *Index) Entries() []string {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	var entries []string
+	for _, page := range i.pages {
+		entries = append(entries, page.Entry)
+	}
+	return entries
+}
+
 type Page struct {
 	Entry  string
 	Layout string
