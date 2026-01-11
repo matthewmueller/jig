@@ -14,17 +14,20 @@ type (
 	EntryPoint   = api.EntryPoint
 	OutputFile   = api.OutputFile
 	Plugin       = api.Plugin
+	StdinOptions = api.StdinOptions
 )
 
 var (
 	JSXAutomatic    = api.JSXAutomatic
 	FormatIIFE      = api.FormatIIFE
 	FormatESModule  = api.FormatESModule
+	FormatCommonJS  = api.FormatCommonJS
 	PlatformNeutral = api.PlatformNeutral
 	PlatformBrowser = api.PlatformBrowser
+	LoaderJS        = api.LoaderJS
 	LoaderTSX       = api.LoaderTSX
-	ES2017          = api.ES2017
 	ES2015          = api.ES2015
+	ES2023          = api.ES2023
 )
 
 func Build(options BuildOptions) (*BuildResult, error) {

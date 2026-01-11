@@ -92,6 +92,10 @@ func (w *FileWatcher) Watch(fn func(events []Event) error) error {
 				return err
 			}
 		case err := <-w.watcher.Errors:
+			// Watcher was closed
+			if err == nil {
+				return nil
+			}
 			if err := w.handleError(err); err != nil {
 				return err
 			}
