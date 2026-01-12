@@ -1,6 +1,6 @@
 export type Props = {
-  name: string;
-};
+  name: string
+}
 
 export default function About(props: Props) {
   return (
@@ -8,5 +8,5 @@ export default function About(props: Props) {
       <h1>About Page</h1>
       <p>This is the about page about {props.name}!!!!</p>
     </main>
-  );
+  )
 }

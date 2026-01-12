@@ -21,8 +21,8 @@ const (
 )
 
 var (
-	reflectTypeURL = reflect.TypeOf((*browserUrl)(nil))
-	reflectTypeInt = reflect.TypeOf(int64(0))
+	reflectTypeURL = reflect.TypeFor[*browserUrl]()
+	reflectTypeInt = reflect.TypeFor[int64]()
 )
 
 func toURL(r *goja.Runtime, v goja.Value) *browserUrl {
@@ -41,7 +41,7 @@ func (m *urlModule) newInvalidURLError(msg, input string) *goja.Object {
 	return o
 }
 
-func (m *urlModule) defineURLAccessorProp(p *goja.Object, name string, getter func(*browserUrl) interface{}, setter func(*browserUrl, goja.Value)) {
+func (m *urlModule) defineURLAccessorProp(p *goja.Object, name string, getter func(*browserUrl) any, setter func(*browserUrl, goja.Value)) {
 	var getterVal, setterVal goja.Value
 	if getter != nil {
 		getterVal = m.r.ToValue(func(call goja.FunctionCall) goja.Value {
@@ -209,7 +209,7 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	p := m.r.NewObject()
 
 	// host
-	m.defineURLAccessorProp(p, "host", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "host", func(u *browserUrl) any {
 		return u.url.Host
 	}, func(u *browserUrl, arg goja.Value) {
 		host := arg.String()
@@ -220,7 +220,7 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// hash
-	m.defineURLAccessorProp(p, "hash", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "hash", func(u *browserUrl) any {
 		if u.url.Fragment != "" {
 			return "#" + u.url.EscapedFragment()
 		}
@@ -234,7 +234,7 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// hostname
-	m.defineURLAccessorProp(p, "hostname", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "hostname", func(u *browserUrl) any {
 		return strings.Split(u.url.Host, ":")[0]
 	}, func(u *browserUrl, arg goja.Value) {
 		h := arg.String()
@@ -252,14 +252,14 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// href
-	m.defineURLAccessorProp(p, "href", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "href", func(u *browserUrl) any {
 		return u.String()
 	}, func(u *browserUrl, arg goja.Value) {
 		u.url = m.parseURL(arg.String(), true)
 	})
 
 	// pathname
-	m.defineURLAccessorProp(p, "pathname", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "pathname", func(u *browserUrl) any {
 		return u.url.EscapedPath()
 	}, func(u *browserUrl, arg goja.Value) {
 		p := arg.String()
@@ -275,12 +275,12 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// origin
-	m.defineURLAccessorProp(p, "origin", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "origin", func(u *browserUrl) any {
 		return u.url.Scheme + "://" + u.url.Hostname()
 	}, nil)
 
 	// password
-	m.defineURLAccessorProp(p, "password", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "password", func(u *browserUrl) any {
 		p, _ := u.url.User.Password()
 		return p
 	}, func(u *browserUrl, arg goja.Value) {
@@ -289,7 +289,7 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// username
-	m.defineURLAccessorProp(p, "username", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "username", func(u *browserUrl) any {
 		return u.url.User.Username()
 	}, func(u *browserUrl, arg goja.Value) {
 		p, has := u.url.User.Password()
@@ -301,14 +301,14 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// port
-	m.defineURLAccessorProp(p, "port", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "port", func(u *browserUrl) any {
 		return u.url.Port()
 	}, func(u *browserUrl, arg goja.Value) {
 		setURLPort(u, arg)
 	})
 
 	// protocol
-	m.defineURLAccessorProp(p, "protocol", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "protocol", func(u *browserUrl) any {
 		return u.url.Scheme + ":"
 	}, func(u *browserUrl, arg goja.Value) {
 		s := arg.String()
@@ -325,7 +325,7 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// Search
-	m.defineURLAccessorProp(p, "search", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "search", func(u *browserUrl) any {
 		u.syncSearchParams()
 		if u.url.RawQuery != "" {
 			return "?" + u.url.RawQuery
@@ -343,7 +343,7 @@ func (m *urlModule) createURLPrototype() *goja.Object {
 	})
 
 	// search Params
-	m.defineURLAccessorProp(p, "searchParams", func(u *browserUrl) interface{} {
+	m.defineURLAccessorProp(p, "searchParams", func(u *browserUrl) any {
 		if u.searchParams == nil {
 			sp := parseSearchQuery(u.url.RawQuery)
 			if sp == nil {

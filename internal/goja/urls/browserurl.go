@@ -131,7 +131,7 @@ func parseSearchQuery(query string) (ret searchParams) {
 
 	query = strings.TrimPrefix(query, "?")
 
-	for _, v := range strings.Split(query, "&") {
+	for v := range strings.SplitSeq(query, "&") {
 		if v == "" {
 			continue
 		}

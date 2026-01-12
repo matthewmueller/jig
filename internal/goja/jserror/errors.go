@@ -44,13 +44,13 @@ func addProps(r *goja.Runtime, e *goja.Object, code string) {
 	e.DefineDataProperty("toString", r.ToValue(error_toString), goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_FALSE)
 }
 
-func NewTypeError(r *goja.Runtime, code string, params ...interface{}) *goja.Object {
+func NewTypeError(r *goja.Runtime, code string, params ...any) *goja.Object {
 	e := r.NewTypeError(params...)
 	addProps(r, e, code)
 	return e
 }
 
-func NewError(r *goja.Runtime, ctor *goja.Object, code string, args ...interface{}) *goja.Object {
+func NewError(r *goja.Runtime, ctor *goja.Object, code string, args ...any) *goja.Object {
 	if ctor == nil {
 		ctor, _ = r.Get("Error").(*goja.Object)
 	}

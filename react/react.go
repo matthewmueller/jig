@@ -535,8 +535,8 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 				return
 			}
 
-			if strings.HasPrefix(r.URL.Path, "/node_modules/") {
-				nodeModule := strings.TrimPrefix(r.URL.Path, "/node_modules/")
+			if after, ok := strings.CutPrefix(r.URL.Path, "/node_modules/"); ok {
+				nodeModule := after
 				code, err := v.transformNodeModule(v.options.Dir, nodeModule)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)

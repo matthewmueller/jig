@@ -1,9 +1,9 @@
-import React from "react";
+import React from "react"
 
 export type Props = {
-  head: React.ReactNode;
-  children: React.ReactNode;
-};
+  head: React.ReactNode
+  children: React.ReactNode
+}
 
 export default function Layout(props: Props) {
   return (
@@ -11,5 +11,5 @@ export default function Layout(props: Props) {
       <head>{props.head}</head>
       <body className="whatever">{props.children}</body>
     </html>
-  );
+  )
 }

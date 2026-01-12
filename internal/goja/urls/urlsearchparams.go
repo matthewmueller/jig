@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	reflectTypeURLSearchParams         = reflect.TypeOf((*urlSearchParams)(nil))
-	reflectTypeURLSearchParamsIterator = reflect.TypeOf((*urlSearchParamsIterator)(nil))
+	reflectTypeURLSearchParams         = reflect.TypeFor[*urlSearchParams]()
+	reflectTypeURLSearchParamsIterator = reflect.TypeFor[*urlSearchParamsIterator]()
 )
 
 func newInvalidTupleError(r *goja.Runtime) *goja.Object {

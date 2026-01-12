@@ -27,8 +27,8 @@ type File struct {
 func (f *File) Dependencies() (deps []string) {
 	for _, output := range f.Outputs {
 		for input := range output.Inputs {
-			idx := strings.IndexByte(input, ':')
-			if idx >= 0 {
+			found := strings.Contains(input, ":")
+			if found {
 				continue
 			}
 			deps = append(deps, input)
