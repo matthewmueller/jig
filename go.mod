@@ -1,18 +1,19 @@
 module github.com/matthewmueller/views
 
-go 1.24.4
+go 1.25.5
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/bep/debounce v1.2.1
 	github.com/buildkite/terminal-to-html/v3 v3.16.8
 	github.com/dop251/goja v0.0.0-20251121114222-56b1242a5f86
-	github.com/evanw/esbuild v0.27.0
+	github.com/evanw/esbuild v0.27.2
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/livebud/cli v0.0.22
 	github.com/livebud/npm v0.1.0
 	github.com/livebud/sse v0.0.5
 	github.com/matryer/is v1.4.1
+	github.com/matthewmueller/cjs v0.0.2
 	github.com/matthewmueller/diff v0.0.3
 	github.com/matthewmueller/glob v0.1.1
 	github.com/matthewmueller/jsx v0.0.11
@@ -39,6 +40,7 @@ require (
 	github.com/livebud/color v0.0.2 // indirect
 	github.com/matthewmueller/css v0.0.4 // indirect
 	github.com/sergi/go-diff v1.3.1 // indirect
+	github.com/tdewolff/parse/v2 v2.8.5 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect

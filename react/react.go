@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/terminal-to-html/v3"
+	"github.com/matthewmueller/cjs"
 	"github.com/matthewmueller/logs"
 	"github.com/matthewmueller/views/internal/esbuild"
 	"github.com/matthewmueller/views/internal/gitignore"
@@ -381,7 +382,17 @@ func (v *Viewer) transformDOM(absDir string, entries ...string) error {
 		JSX:                 esbuild.JSXAutomatic,
 		Inject:              []string{"inject:inject.js"},
 		Plugins:             plugins,
-	})
+	}
+	// Development build
+	if !v.options.Minify {
+		buildOptions.Splitting = false
+		buildOptions.Plugins = append(
+			buildOptions.Plugins,
+			esbuild.ExternalNodeModules("/node_modules/"),
+		)
+	}
+	// Build the file
+	result, err := esbuild.Build(buildOptions)
 	if err != nil {
 		return fmt.Errorf("react: failed to bundle ssr: %w", err)
 	} else if len(result.OutputFiles) == 0 {
@@ -391,6 +402,91 @@ func (v *Viewer) transformDOM(absDir string, entries ...string) error {
 		v.options.Log.Warn("esbuild warning", slog.String("message", warning.Text))
 	}
 	return nil
+}
+
+func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
+	const prefix = "/node_modules/"
+
+	// Build the file
+	result, err := esbuild.Build(esbuild.BuildOptions{
+		EntryPoints:   []string{module},
+		AbsWorkingDir: absDir,
+		Bundle:        true,
+		Splitting:     false,
+		Outfile:       ".",
+		Format:        esbuild.FormatESModule,
+		Target:        esbuild.ES2023,
+		Platform:      esbuild.PlatformBrowser,
+		JSX:           esbuild.JSXAutomatic,
+		Plugins: []esbuild.Plugin{
+			esbuild.ExternalNodeModules(prefix, module),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cjs: failed to bundle module %q: %w", module, err)
+	} else if len(result.OutputFiles) != 1 {
+		return nil, fmt.Errorf("cjs: expected exactly one output file after bundling module %q", module)
+	}
+	for _, warning := range result.Warnings {
+		v.options.Log.Warn("cjs: bundle warning", slog.String("message", warning.Text))
+	}
+
+	contents := result.OutputFiles[0].Contents
+	exports, err := cjs.ParseExports(module, string(contents))
+	if err != nil {
+		return nil, fmt.Errorf("cjs: failed to parse exports of %q: %w", module, err)
+	}
+
+	// No exports, return as-is since it's likely an ESM module already
+	if len(exports) == 0 {
+		return contents, nil
+	}
+
+	// Re-bundle with an ESM export wrapper as the entrypoint
+	exporter := new(bytes.Buffer)
+	if len(exports) > 0 {
+		exporter.WriteString("export {\n")
+		for _, export := range exports {
+			exporter.WriteString(export + ",\n")
+		}
+		exporter.WriteString("} from \"")
+		exporter.WriteString(module)
+		exporter.WriteString("\";\n")
+	}
+	result, err = esbuild.Build(esbuild.BuildOptions{
+		Stdin: &esbuild.StdinOptions{
+			Contents:   exporter.String(),
+			Loader:     esbuild.LoaderJS,
+			Sourcefile: module,
+			ResolveDir: ".",
+		},
+		AbsWorkingDir: absDir,
+		Bundle:        true,
+		Splitting:     false,
+		Outfile:       ".",
+		Format:        esbuild.FormatESModule,
+		Target:        esbuild.ES2023,
+		Platform:      esbuild.PlatformBrowser,
+		JSX:           esbuild.JSXAutomatic,
+		Plugins: []esbuild.Plugin{
+			esbuild.ExternalNodeModules(prefix, module),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cjs: failed to rebundle module %q: %w", module, err)
+	} else if len(result.OutputFiles) != 1 {
+		return nil, fmt.Errorf("cjs: expected exactly one output file after rebundling %q", module)
+	}
+	for _, warning := range result.Warnings {
+		v.options.Log.Warn("cjs: rebundle warning", slog.String("message", warning.Text))
+	}
+
+	rewritten, err := cjs.RewriteRequires(module, prefix, string(result.OutputFiles[0].Contents))
+	if err != nil {
+		return nil, fmt.Errorf("cjs: failed to rewrite requires: %w", err)
+	}
+
+	return []byte(rewritten), nil
 }
 
 func getRenderFunction(vm *goja.Runtime, path string) (goja.Callable, error) {
@@ -436,6 +532,19 @@ func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
 			if v.options.LiveRoute != "" && strings.HasPrefix(r.URL.Path, v.options.LiveRoute) {
 				// TODO: Implement live route handling
 				http.Error(w, "live route not implemented", http.StatusNotImplemented)
+				return
+			}
+
+			if strings.HasPrefix(r.URL.Path, "/node_modules/") {
+				nodeModule := strings.TrimPrefix(r.URL.Path, "/node_modules/")
+				code, err := v.transformNodeModule(v.options.Dir, nodeModule)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				// Serve the code
+				w.Header().Set("Content-Type", "application/javascript")
+				w.Write(code)
 				return
 			}
 

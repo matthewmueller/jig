@@ -1,7 +1,6 @@
 package esbuild
 
 import (
-	"path"
 	"slices"
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
@@ -21,7 +20,7 @@ func ExternalNodeModules(prefix string, ignores ...string) esbuild.Plugin {
 				if slices.Contains(ignores, args.Path) {
 					return result, nil
 				}
-				result.Path = path.Join(prefix, args.Path)
+				result.Path = prefix + args.Path
 				result.External = true
 				return result, nil
 			})
