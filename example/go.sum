@@ -56,8 +56,8 @@ github.com/matthewmueller/enroute v0.1.0 h1:m1YXQchjOjgkptG4c/teGuIWkE7ruq+IcEwA
 github.com/matthewmueller/enroute v0.1.0/go.mod h1:Cf1cykzrXlPLAKgbWEsflx39jGNBQ/51lyJfzBzW4S8=
 github.com/matthewmueller/glob v0.1.1 h1:oYNZ28TDoUV7k6ackbr7Yc9sKWFD+M+xNMDIia48BFU=
 github.com/matthewmueller/glob v0.1.1/go.mod h1:RRGM70besO1vtgayQ+AjwA51G3unkmP9J2rWJjNJBxM=
-github.com/matthewmueller/jsx v0.0.11 h1:EeAtZpxd3ibPZlUOmme9T3FNUSt6wX2+DJcFAWGzlx8=
-github.com/matthewmueller/jsx v0.0.11/go.mod h1:umuNMgnS0vCxX6407C5nDSXVmqeLH5hEO6ClJXi7j/4=
+github.com/matthewmueller/jsx v0.0.12 h1:T2BvZ25BJlIjvEcAOXZhFygpFPVBamQCXeQp/CTcDH4=
+github.com/matthewmueller/jsx v0.0.12/go.mod h1:umuNMgnS0vCxX6407C5nDSXVmqeLH5hEO6ClJXi7j/4=
 github.com/matthewmueller/logs v0.0.8 h1:1FURUN44N5liK9HmoZWzDP6nK40EjNE7JLrGWe6VYfU=
 github.com/matthewmueller/logs v0.0.8/go.mod h1:L9kH2CVrUb6ERGMriShkQR2+kDHTa1OxbNRKbom1Jrc=
 github.com/matthewmueller/styledjsx v0.0.11 h1:mgvBFZzCCe+c5/6xiD8g8xiivbrTTnxEzmvZ0AaWuxY=

@@ -16,7 +16,7 @@ require (
 	github.com/matthewmueller/cjs v0.0.2
 	github.com/matthewmueller/diff v0.0.3
 	github.com/matthewmueller/glob v0.1.1
-	github.com/matthewmueller/jsx v0.0.11
+	github.com/matthewmueller/jsx v0.0.12
 	github.com/matthewmueller/logs v0.0.8
 	github.com/matthewmueller/styledjsx v0.0.11
 	github.com/matthewmueller/virt v0.0.14

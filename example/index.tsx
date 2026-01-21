@@ -1,3 +1,4 @@
+import Header from "~/Header"
 import React from "react"
 
 export type Props = {
@@ -9,15 +10,15 @@ export default function Index(props: Props) {
   return (
     <main>
       <head>
-        <title>Hello world</title>
+        <title>{`Hello world ${count}`}</title>
         <meta charSet="UTF-8" />
         <meta name="cool" content={"story"} />
         {typeof window === "undefined" ? null : (
-          <meta name="browser" content={"only"} />
+          <meta name="browser" content={"only" + count} />
         )}
       </head>
       <h1>Hello, {props.name}!!</h1>
-      <Header2 />
+      <Header />
       <p>Count: {count}...</p>
       <button onClick={() => setCount(count + 1)}>Increment</button>
       <style jsx>{`
@@ -28,8 +29,4 @@ export default function Index(props: Props) {
       `}</style>
     </main>
   )
-}
-
-function Header2() {
-  return <h2>This is a header 2</h2>
 }

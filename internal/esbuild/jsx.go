@@ -28,11 +28,11 @@ func JSX(runtime string) esbuild.Plugin {
 			}
 			// TODO: this is very hacky, hoist the conditional up
 			if strings.Contains(runtime, "ssr_runtime") {
-				if err := styledjsx.Rewrite(args.Path, runtime, script); err != nil {
+				if err := styledjsx.RewriteSSR(args.Path, runtime, script); err != nil {
 					return result, err
 				}
 			} else {
-				if err := styledjsx.Remove(args.Path, script); err != nil {
+				if err := styledjsx.RewriteDOM(args.Path, script); err != nil {
 					return result, err
 				}
 			}

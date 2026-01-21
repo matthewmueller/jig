@@ -31,7 +31,7 @@ require (
 	github.com/matthewmueller/css v0.0.4 // indirect
 	github.com/matthewmueller/enroute v0.1.0 // indirect
 	github.com/matthewmueller/glob v0.1.1 // indirect
-	github.com/matthewmueller/jsx v0.0.11 // indirect
+	github.com/matthewmueller/jsx v0.0.12 // indirect
 	github.com/matthewmueller/styledjsx v0.0.11 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/tdewolff/parse/v2 v2.8.5 // indirect

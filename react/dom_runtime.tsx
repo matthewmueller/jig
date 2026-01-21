@@ -99,8 +99,10 @@ export class Head extends Component<PropsWithChildren> {
       }
       // Replace any existing elements
       if (oldElement && oldElement.parentElement && newElement) {
-        oldElement.parentElement.replaceChild(newElement, oldElement)
-        heads[selector] = newElement
+        if (!oldElement.isEqualNode(newElement)) {
+          oldElement.parentElement.replaceChild(newElement, oldElement)
+          heads[selector] = newElement
+        }
       } else if (newElement) {
         head.appendChild(newElement)
         heads[selector] = newElement

@@ -5,7 +5,7 @@ import (
 	"github.com/matthewmueller/styledjsx"
 )
 
-func Rewrite(path, runtime string, script *ast.Script) error {
+func RewriteSSR(path, runtime string, script *ast.Script) error {
 	rewriter := styledjsx.New()
 	rewriter.Import.Name = "Style"
 	rewriter.Import.Path = runtime
@@ -14,7 +14,7 @@ func Rewrite(path, runtime string, script *ast.Script) error {
 	return rewriter.RewriteAST(path, script)
 }
 
-func Remove(path string, script *ast.Script) error {
+func RewriteDOM(path string, script *ast.Script) error {
 	rewriter := styledjsx.New()
 	rewriter.Import.Name = ""
 	rewriter.Import.Path = ""
