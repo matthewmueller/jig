@@ -36,7 +36,7 @@ func run(log *slog.Logger) error {
 	}
 	defer viewer.Close()
 	router := mux.New()
-	router.Use(viewer.Middleware())
+	router.Use(viewer)
 	router.Get("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		defer func() {

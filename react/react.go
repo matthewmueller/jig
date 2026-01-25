@@ -525,75 +525,73 @@ func (v *Viewer) Build(paths ...string) error {
 	return nil
 }
 
-func (v *Viewer) Middleware() func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return v.liveReload.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Handle the live route
-			if v.options.LiveRoute != "" && strings.HasPrefix(r.URL.Path, v.options.LiveRoute) {
-				// TODO: Implement live route handling
-				http.Error(w, "live route not implemented", http.StatusNotImplemented)
+func (v *Viewer) Middleware(next http.Handler) http.Handler {
+	return v.liveReload.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle the live route
+		if v.options.LiveRoute != "" && strings.HasPrefix(r.URL.Path, v.options.LiveRoute) {
+			// TODO: Implement live route handling
+			http.Error(w, "live route not implemented", http.StatusNotImplemented)
+			return
+		}
+
+		if after, ok := strings.CutPrefix(r.URL.Path, "/node_modules/"); ok {
+			nodeModule := after
+			code, err := v.transformNodeModule(v.options.Dir, nodeModule)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-
-			if after, ok := strings.CutPrefix(r.URL.Path, "/node_modules/"); ok {
-				nodeModule := after
-				code, err := v.transformNodeModule(v.options.Dir, nodeModule)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				// Serve the code
-				w.Header().Set("Content-Type", "application/javascript")
-				w.Write(code)
-				return
-			}
-
-			// Forward along non-JS requests
-			if !strings.HasSuffix(r.URL.Path, ".js") {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			path := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".js")
-			code, ok := v.serveCache.Get(path)
-			if !ok {
-				distfs := v.options.FS
-				// Transform the live path when we're not caching or when there's no
-				// embedded filesystem present. Often a static filesystem will be passed in
-				// during development but we still want the current version of the code.
-				if !v.options.Cache || distfs == nil {
-					if err := v.transformDOM(v.options.Dir, path); err != nil {
-						if errors.Is(err, fs.ErrNotExist) {
-							next.ServeHTTP(w, r)
-							return
-						}
-						// TODO: javascript-friendly error message
-						consoleError(w, "react: failed to transform for dom: %s", err.Error())
-						return
-					}
-					distfs = os.DirFS(v.options.Dir)
-				}
-
-				// Read the code
-				transformedCode, err := fs.ReadFile(distfs, gopath.Join(v.options.OutDir, "dom", path+".js"))
-				if err != nil {
-					consoleError(w, "react: failed to read dom file: %s", err.Error())
-					return
-				}
-
-				// Cache the transformed code
-				if v.options.Cache {
-					v.serveCache.Set(path, transformedCode)
-				}
-
-				code = transformedCode
-			}
-
 			// Serve the code
 			w.Header().Set("Content-Type", "application/javascript")
 			w.Write(code)
-		}))
-	}
+			return
+		}
+
+		// Forward along non-JS requests
+		if !strings.HasSuffix(r.URL.Path, ".js") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		path := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".js")
+		code, ok := v.serveCache.Get(path)
+		if !ok {
+			distfs := v.options.FS
+			// Transform the live path when we're not caching or when there's no
+			// embedded filesystem present. Often a static filesystem will be passed in
+			// during development but we still want the current version of the code.
+			if !v.options.Cache || distfs == nil {
+				if err := v.transformDOM(v.options.Dir, path); err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
+						next.ServeHTTP(w, r)
+						return
+					}
+					// TODO: javascript-friendly error message
+					consoleError(w, "react: failed to transform for dom: %s", err.Error())
+					return
+				}
+				distfs = os.DirFS(v.options.Dir)
+			}
+
+			// Read the code
+			transformedCode, err := fs.ReadFile(distfs, gopath.Join(v.options.OutDir, "dom", path+".js"))
+			if err != nil {
+				consoleError(w, "react: failed to read dom file: %s", err.Error())
+				return
+			}
+
+			// Cache the transformed code
+			if v.options.Cache {
+				v.serveCache.Set(path, transformedCode)
+			}
+
+			code = transformedCode
+		}
+
+		// Serve the code
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Write(code)
+	}))
 }
 
 func (v *Viewer) Render(w io.Writer, path string, props any) {

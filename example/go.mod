@@ -7,7 +7,7 @@ replace github.com/matthewmueller/livereload => ../../livereload
 go 1.25.5
 
 require (
-	github.com/livebud/mux v0.3.0
+	github.com/livebud/mux v0.4.0
 	github.com/matthewmueller/logs v0.0.8
 	github.com/matthewmueller/views v0.0.0-00010101000000-000000000000
 )

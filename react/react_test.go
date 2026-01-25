@@ -220,7 +220,7 @@ func TestServeClient(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 
-	handler := viewer.Middleware()(http.NotFoundHandler())
+	handler := viewer.Middleware(http.NotFoundHandler())
 	req := httptest.NewRequest("GET", "/index.jsx.js", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
