@@ -1,22 +1,47 @@
-package goja
+package goja_test
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 
-	js "github.com/dop251/goja"
 	"github.com/matryer/is"
+	"github.com/matthewmueller/views/internal/goja"
 )
 
-func TestFormatConsole(t *testing.T) {
+func TestConsoleLogObject(t *testing.T) {
 	is := is.New(t)
-	runtime := js.New()
-	actual := formatConsole([]js.Value{
-		runtime.ToValue("Received `%s` for a non-boolean attribute `%s`. If you want to write it to the DOM, pass a string instead: %s=\"%s\" or %s={value.toString()}."),
-		runtime.ToValue(true),
-		runtime.ToValue("global"),
-		runtime.ToValue("global"),
-		runtime.ToValue(true),
-		runtime.ToValue("global"),
+	output := new(bytes.Buffer)
+	pool := goja.New(slog.New(slog.NewTextHandler(output, nil)))
+	vm := pool.Acquire()
+	t.Cleanup(func() {
+		pool.Release(vm)
 	})
-	is.Equal(actual, "Received `true` for a non-boolean attribute `global`. If you want to write it to the DOM, pass a string instead: global=\"true\" or global={value.toString()}.")
+
+	_, err := vm.RunString(`console.log({ name: "Views", port: 9000 })`)
+	is.NoErr(err)
+	is.True(strings.Contains(output.String(), `msg="{ name: 'Views', port: 9000 }"`))
+}
+
+func TestConsoleLogObjectValues(t *testing.T) {
+	is := is.New(t)
+	output := new(bytes.Buffer)
+	pool := goja.New(slog.New(slog.NewTextHandler(output, nil)))
+	vm := pool.Acquire()
+	t.Cleanup(func() {
+		pool.Release(vm)
+	})
+
+	_, err := vm.RunString(`console.log("config:", { enabled: true, tags: ["ssr", "jsx"] })`)
+	is.NoErr(err)
+	is.True(strings.Contains(output.String(), `msg="config: { enabled: true, tags: [ 'ssr', 'jsx' ] }"`))
+
+	_, err = vm.RunString(`console.log({ enabled: true }, "tail")`)
+	is.NoErr(err)
+	is.True(strings.Contains(output.String(), `msg="{ enabled: true } tail"`))
+
+	_, err = vm.RunString(`console.log({}, [])`)
+	is.NoErr(err)
+	is.True(strings.Contains(output.String(), `msg="{} []"`))
 }
