@@ -229,6 +229,41 @@ func TestRenderDefaultEnv(t *testing.T) {
 	contains(t, string(body), `"from-os"`)
 }
 
+func TestRenderMissingEnv(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index() {
+				return <div>{process.env.API_URL ? "defined" : "undefined"}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithEnv(map[string]string{
+			"APP_NAME": "Views",
+		}),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", nil)
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	rootHTML, err := doc.Find("#root").Html()
+	is.NoErr(err)
+	diff.TestString(t, rootHTML, `<div>undefined</div>`)
+}
+
 func TestRenderProduction(t *testing.T) {
 	is := is.New(t)
 	dir := t.TempDir()

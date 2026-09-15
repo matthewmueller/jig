@@ -115,7 +115,10 @@ func defaultFinder(dir string, entries ...string) (Pages, error) {
 }
 
 func defaults() *options {
-	define := map[string]string{}
+	define := map[string]string{
+		"process":     "{}",
+		"process.env": "{}",
+	}
 	opts := &options{
 		Dir:       ".",
 		OutDir:    "dist",
