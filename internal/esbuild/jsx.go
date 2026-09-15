@@ -1,6 +1,7 @@
 package esbuild
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,21 @@ import (
 	"github.com/matthewmueller/views/internal/head"
 	"github.com/matthewmueller/views/internal/styledjsx"
 )
+
+func transpileTSX(path, source string) (string, error) {
+	result := esbuild.Transform(source, esbuild.TransformOptions{
+		Loader:     esbuild.LoaderTSX,
+		JSX:        esbuild.JSXPreserve,
+		Sourcefile: path,
+	})
+	if len(result.Errors) > 0 {
+		messages := esbuild.FormatMessages(result.Errors, esbuild.FormatMessagesOptions{
+			Kind: esbuild.ErrorMessage,
+		})
+		return "", fmt.Errorf("jsx: failed to transpile typescript: %s", strings.Join(messages, "\n"))
+	}
+	return string(result.Code), nil
+}
 
 func JSX(runtime string) esbuild.Plugin {
 	transformFile := func(ext string, loader esbuild.Loader) func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
@@ -22,7 +38,16 @@ func JSX(runtime string) esbuild.Plugin {
 			if err != nil {
 				return result, err
 			}
-			script, err := jsx.Parse(args.Path, string(code))
+			contents := string(code)
+			outputLoader := loader
+			if ext == ".tsx" {
+				contents, err = transpileTSX(args.Path, contents)
+				if err != nil {
+					return result, err
+				}
+				outputLoader = esbuild.LoaderJSX
+			}
+			script, err := jsx.Parse(args.Path, contents)
 			if err != nil {
 				return result, err
 			}
@@ -39,10 +64,10 @@ func JSX(runtime string) esbuild.Plugin {
 			if err := head.Rewrite(args.Path, runtime, script); err != nil {
 				return result, err
 			}
-			contents := script.String()
+			contents = script.String()
 			result.Contents = &contents
 			result.ResolveDir = filepath.Dir(args.Path)
-			result.Loader = loader
+			result.Loader = outputLoader
 			return result, nil
 		}
 	}

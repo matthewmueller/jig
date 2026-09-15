@@ -264,6 +264,147 @@ func TestRenderMissingEnv(t *testing.T) {
 	diff.TestString(t, rootHTML, `<div>undefined</div>`)
 }
 
+func TestRenderImportTSX(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			import Form from './form'
+			export default function Index() {
+				return <div><Form /></div>;
+			}
+		`,
+		"form.tsx": `
+			import React from 'react';
+			type Fields = { [key: string]: string };
+			export default class Form<F extends Fields> extends React.Component {
+				name = <K extends keyof F>(name: K): string => {
+					return String(name);
+				}
+				render() {
+					return <form>Form</form>;
+				}
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", nil)
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	rootHTML, err := doc.Find("#root").Html()
+	is.NoErr(err)
+	diff.TestString(t, rootHTML, `<div><form>Form</form></div>`)
+
+	handler := viewer.Middleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusOK)
+	contains(t, rec.Body.String(), `Form`)
+}
+
+func TestRenderImportGenericFormTSX(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"tsconfig.json": `
+			{
+				"compilerOptions": {
+					"paths": {
+						"~/*": ["./*"]
+					}
+				}
+			}
+		`,
+		"index.jsx": `
+			import React from 'react';
+			import Form from '~/form';
+			export default function Index() {
+				return <Form defaults={{ email: '' }} />;
+			}
+		`,
+		"form.tsx": `
+			import { Component, type InputEvent } from 'react';
+
+			type Props<Fields> = {
+				defaults: { [Key in keyof Fields]: Fields[Key] };
+			};
+
+			type State<Fields> = {
+				fields: Fields;
+				disabled: boolean;
+			};
+
+			export type Fields = {
+				[key: string]: string;
+			};
+
+			export default class Form<F extends Fields> extends Component<Props<F>, State<F>> {
+				id = 1;
+				state: State<F> = {
+					fields: this.props.defaults,
+					disabled: false,
+				};
+
+				name = <K extends keyof F>(name: K): string => {
+					return String(name) + '-' + this.id;
+				};
+
+				onInput = <K extends keyof F>(key: K) => {
+					return (e: InputEvent<HTMLInputElement>) => {
+						const fields = { ...this.state.fields };
+						fields[key] = e.currentTarget.value as F[K];
+						this.setState({ fields });
+					};
+				};
+
+				render() {
+					return <form>{this.name('email' as keyof F)}</form>;
+				}
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", nil)
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	rootHTML, err := doc.Find("#root").Html()
+	is.NoErr(err)
+	diff.TestString(t, rootHTML, `<form>email-1</form>`)
+
+	handler := viewer.Middleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusOK)
+	contains(t, rec.Body.String(), `String(name)`)
+}
+
 func TestRenderProduction(t *testing.T) {
 	is := is.New(t)
 	dir := t.TempDir()
