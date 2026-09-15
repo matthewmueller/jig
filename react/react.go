@@ -14,6 +14,7 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/buildkite/terminal-to-html/v3"
@@ -36,6 +37,8 @@ type options struct {
 	Watch     bool
 	LiveRoute string
 	Env       map[string]string
+	Define    map[string]string
+	// envSet    bool
 	Cache     bool
 	Log       *slog.Logger
 	Minify    bool
@@ -76,6 +79,9 @@ func WithLiveRoute(liveRoute string) Option {
 
 func WithEnv(env map[string]string) Option {
 	return func(o *options) {
+		if o.Env == nil {
+			o.Env = map[string]string{}
+		}
 		maps.Copy(o.Env, env)
 	}
 }
@@ -109,17 +115,17 @@ func defaultFinder(dir string, entries ...string) (Pages, error) {
 }
 
 func defaults() *options {
-	env := map[string]string{}
+	define := map[string]string{}
 	opts := &options{
 		Dir:       ".",
 		OutDir:    "dist",
 		FS:        nil,
-		Env:       env,
+		Define:    define,
 		Log:       logs.Default(),
 		FindPages: defaultFinder,
 	}
 	if isProduction() {
-		env["process.env.NODE_ENV"] = "\"production\""
+		define["process.env.NODE_ENV"] = `"production"`
 		opts.Cache = true
 		opts.Minify = true
 	} else {
@@ -131,6 +137,16 @@ func defaults() *options {
 	return opts
 }
 
+func environ() map[string]string {
+	env := map[string]string{}
+	for _, entry := range os.Environ() {
+		if key, value, ok := strings.Cut(entry, "="); ok {
+			env[key] = value
+		}
+	}
+	return env
+}
+
 func Load(options ...Option) (viewer *Viewer, err error) {
 	// Default options
 	opts := defaults()
@@ -138,6 +154,16 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 	// Apply the user configuration
 	for _, o := range options {
 		o(opts)
+	}
+
+	// Define the environment variables. Defaults to the current environment.
+	if opts.Env == nil {
+		opts.Env = environ()
+	}
+	for key, value := range opts.Env {
+		if _, ok := opts.Define["process.env."+key]; !ok {
+			opts.Define["process.env."+key] = strconv.Quote(value)
+		}
 	}
 
 	// Set the directory to an absolute dir
@@ -296,7 +322,7 @@ func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry
 		MinifySyntax:      v.options.Minify,
 		Platform:          esbuild.PlatformBrowser,
 		GlobalName:        fmt.Sprintf("__go_react__[%q]", entry),
-		Define:            v.options.Env,
+		Define:            v.options.Define,
 		JSX:               esbuild.JSXAutomatic,
 		Inject:            []string{"inject:inject.js"},
 		Plugins:           plugins,
@@ -378,7 +404,7 @@ func (v *Viewer) transformDOM(absDir string, entries ...string) error {
 		MinifyIdentifiers:   v.options.Minify,
 		MinifySyntax:        v.options.Minify,
 		Platform:            esbuild.PlatformBrowser,
-		Define:              v.options.Env,
+		Define:              v.options.Define,
 		JSX:                 esbuild.JSXAutomatic,
 		Inject:              []string{"inject:inject.js"},
 		Plugins:             plugins,
@@ -447,7 +473,8 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 	if len(exports) > 0 {
 		exporter.WriteString("export {\n")
 		for _, export := range exports {
-			exporter.WriteString(export + ",\n")
+			exporter.WriteString(export)
+			exporter.WriteString(",\n")
 		}
 		exporter.WriteString("} from \"")
 		exporter.WriteString(module)

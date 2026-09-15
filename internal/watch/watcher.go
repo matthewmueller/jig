@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/bep/debounce"
@@ -109,12 +110,12 @@ func (w *FileWatcher) handleEvents(events []Event, fn func(events []Event) error
 	}
 	uniqueEvents := make([]Event, 0, len(events))
 	seen := map[string]struct{}{}
-	for i := len(events) - 1; i >= 0; i-- {
-		if _, ok := seen[events[i].Name]; ok {
+	for _, event := range slices.Backward(events) {
+		if _, ok := seen[event.Name]; ok {
 			continue
 		}
-		seen[events[i].Name] = struct{}{}
-		uniqueEvents = append(uniqueEvents, events[i])
+		seen[event.Name] = struct{}{}
+		uniqueEvents = append(uniqueEvents, event)
 	}
 	if err := fn(uniqueEvents); err != nil {
 		return err

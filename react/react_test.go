@@ -137,6 +137,98 @@ func TestRenderMultiple(t *testing.T) {
 	diff.TestString(t, propsText, expectProps)
 }
 
+func TestRenderEnv(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index() {
+				return <div>{process.env.APP_NAME} on {process.env.PORT}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithEnv(map[string]string{
+			"APP_NAME": "Views",
+			"PORT":     "9000",
+		}),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", nil)
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	rootHTML, err := doc.Find("#root").Html()
+	is.NoErr(err)
+	diff.TestString(t, rootHTML, `<div>Views<!-- --> on <!-- -->9000</div>`)
+
+	handler := viewer.Middleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	res := rec.Result()
+	is.Equal(res.StatusCode, http.StatusOK)
+	body, err := io.ReadAll(res.Body)
+	is.NoErr(err)
+	is.NoErr(res.Body.Close())
+	contains(t, string(body), `"Views"`)
+	contains(t, string(body), `"9000"`)
+}
+
+func TestRenderDefaultEnv(t *testing.T) {
+	is := is.New(t)
+	t.Setenv("VIEWS_RENDER_ENV_DEFAULT", "from-os")
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index() {
+				return <div>{process.env.VIEWS_RENDER_ENV_DEFAULT}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", nil)
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	rootHTML, err := doc.Find("#root").Html()
+	is.NoErr(err)
+	diff.TestString(t, rootHTML, `<div>from-os</div>`)
+
+	handler := viewer.Middleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	res := rec.Result()
+	is.Equal(res.StatusCode, http.StatusOK)
+	body, err := io.ReadAll(res.Body)
+	is.NoErr(err)
+	is.NoErr(res.Body.Close())
+	contains(t, string(body), `"from-os"`)
+}
+
 func TestRenderProduction(t *testing.T) {
 	is := is.New(t)
 	dir := t.TempDir()
