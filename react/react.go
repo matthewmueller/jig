@@ -381,7 +381,7 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 				Entry: path,
 			})
 			if err != nil {
-				return esbuild.OnLoadResult{}, fmt.Errorf("react: failed to render ssr entry template: %w", err)
+				return esbuild.OnLoadResult{}, fmt.Errorf("react: failed to render dom entry template: %w", err)
 			}
 			return esbuild.OnLoadResult{
 				Loader:     esbuild.LoaderTSX,
@@ -434,9 +434,9 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 	// Build the file
 	result, err := esbuild.Build(buildOptions)
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to bundle ssr: %w", err)
+		return nil, fmt.Errorf("react: failed to bundle dom: %w", err)
 	} else if len(result.OutputFiles) == 0 {
-		return nil, fmt.Errorf("react: no output files after ssr bundle")
+		return nil, fmt.Errorf("react: no output files after dom bundle")
 	}
 	for _, warning := range result.Warnings {
 		v.options.Log.Warn("esbuild warning", slog.String("message", warning.Text))
@@ -464,18 +464,18 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("cjs: failed to bundle module %q: %w", module, err)
+		return nil, fmt.Errorf("react: failed to bundle module %q: %w", module, err)
 	} else if len(result.OutputFiles) != 1 {
-		return nil, fmt.Errorf("cjs: expected exactly one output file after bundling module %q", module)
+		return nil, fmt.Errorf("react: expected exactly one output file after bundling module %q", module)
 	}
 	for _, warning := range result.Warnings {
-		v.options.Log.Warn("cjs: bundle warning", slog.String("message", warning.Text))
+		v.options.Log.Warn("esbuild warning", slog.String("module", module), slog.String("message", warning.Text))
 	}
 
 	contents := result.OutputFiles[0].Contents
 	exports, err := cjs.ParseExports(module, string(contents))
 	if err != nil {
-		return nil, fmt.Errorf("cjs: failed to parse exports of %q: %w", module, err)
+		return nil, fmt.Errorf("react: failed to parse exports of %q: %w", module, err)
 	}
 
 	// No exports, return as-is since it's likely an ESM module already
@@ -515,17 +515,17 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("cjs: failed to rebundle module %q: %w", module, err)
+		return nil, fmt.Errorf("react: failed to rebundle module %q: %w", module, err)
 	} else if len(result.OutputFiles) != 1 {
-		return nil, fmt.Errorf("cjs: expected exactly one output file after rebundling %q", module)
+		return nil, fmt.Errorf("react: expected exactly one output file after rebundling %q", module)
 	}
 	for _, warning := range result.Warnings {
-		v.options.Log.Warn("cjs: rebundle warning", slog.String("message", warning.Text))
+		v.options.Log.Warn("esbuild warning", slog.String("module", module), slog.String("message", warning.Text))
 	}
 
 	rewritten, err := cjs.RewriteRequires(module, prefix, string(result.OutputFiles[0].Contents))
 	if err != nil {
-		return nil, fmt.Errorf("cjs: failed to rewrite requires: %w", err)
+		return nil, fmt.Errorf("react: failed to rewrite requires: %w", err)
 	}
 
 	return []byte(rewritten), nil
@@ -904,11 +904,7 @@ func isGoRun() bool {
 	if err != nil {
 		return false
 	}
-	if strings.Contains(exe, string(filepath.Separator)+"go-build") {
-		return true
-	}
-	// Otherwise, trap interrupts by default
-	return false
+	return strings.Contains(exe, string(filepath.Separator)+"go-build")
 }
 
 func consoleError(w http.ResponseWriter, format string, a ...any) {
