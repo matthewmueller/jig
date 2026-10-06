@@ -1,6 +1,7 @@
 package react_test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1054,4 +1056,59 @@ func TestRenderCanceled(t *testing.T) {
 	// Other renders still work
 	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
 	contains(t, actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`)
+}
+
+func TestLiveReload(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"index.jsx": `export default function Index() { return null }`,
+	}, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(true),
+		react.WithLiveRoute("/.live"),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	server := httptest.NewServer(viewer.Middleware(http.NotFoundHandler()))
+	t.Cleanup(server.Close)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/.live", nil)
+	is.NoErr(err)
+	req.Header.Set("Accept", "text/event-stream")
+	res, err := server.Client().Do(req)
+	is.NoErr(err)
+	defer res.Body.Close()
+	// Keep editing until the event arrives, since the subscription is
+	// registered asynchronously
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	defer cancel()
+	wg.Go(func() {
+		for i := 0; ctx.Err() == nil; i++ {
+			os.WriteFile(filepath.Join(dir, "index.jsx"), []byte(`export default function Index() { return `+strconv.Itoa(i)+` }`), 0644)
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
+	scanner := bufio.NewScanner(res.Body)
+	var data string
+	for scanner.Scan() {
+		if after, ok := strings.CutPrefix(scanner.Text(), "data: "); ok {
+			data = after
+			break
+		}
+	}
+	is.NoErr(scanner.Err())
+	var events []struct {
+		Op   string `json:"op"`
+		Path string `json:"path"`
+	}
+	is.NoErr(json.Unmarshal([]byte(data), &events))
+	is.Equal(len(events), 1)
+	is.True(events[0].Op != "")
+	is.Equal(events[0].Path, "index.jsx")
 }

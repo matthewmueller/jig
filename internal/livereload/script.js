@@ -33,15 +33,8 @@
   // Handle reload events
   es.addEventListener("reload", function (e) {
     console.debug("livereload: eventsource got 'reload' event");
-    const evs = e.data.split(";");
-    const events = [];
-    for (let i = 0; i < evs.length; i++) {
-      const event = evs[i].split(":");
-      if (event.length !== 2) continue;
-      const op = event[0];
-      const path = event[1];
-      events.push({ op, path });
-    }
+    // [{ op: "WRITE", path: "view/index.tsx" }, ...]
+    const events = JSON.parse(e.data);
     document.dispatchEvent(
       new CustomEvent("reload", {
         bubbles: true,

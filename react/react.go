@@ -789,43 +789,41 @@ func (v *Viewer) compile(path string) (*goja.Program, error) {
 	return program, nil
 }
 
-func filterReloadEvents(events []watch.Event) (filtered []watch.Event) {
-	filtered = make([]watch.Event, 0, len(events))
+// reloadEvent is a file change sent to the livereload client
+type reloadEvent struct {
+	Op   string `json:"op"`
+	Path string `json:"path"`
+}
+
+func (v *Viewer) onChange(events []watch.Event) error {
+	// Removed files don't need a reload
+	var reloads []reloadEvent
 	for _, event := range events {
 		if event.Op&watch.Remove != 0 {
 			continue
 		}
-		filtered = append(filtered, event)
-	}
-	return filtered
-}
-
-func formatReloadEvents(events []watch.Event) []byte {
-	var data bytes.Buffer
-	for i, event := range events {
-		if i > 0 {
-			data.WriteString(";")
+		path, err := filepath.Rel(v.options.Dir, event.Name)
+		if err != nil {
+			return err
 		}
-		data.WriteString(event.String())
+		reloads = append(reloads, reloadEvent{event.Op.String(), filepath.ToSlash(path)})
 	}
-	return data.Bytes()
-}
-
-func (v *Viewer) onChange(events []watch.Event) error {
-	events = filterReloadEvents(events)
-	if len(events) == 0 {
+	if len(reloads) == 0 {
 		return nil
 	}
 
-	v.options.Log.Debug("livereload: triggering live reload", "events", events)
+	v.options.Log.Debug("livereload: triggering live reload", "events", reloads)
 
 	// Publish a livereload event
-	eventData := formatReloadEvents(events)
+	data, err := json.Marshal(reloads)
+	if err != nil {
+		return err
+	}
 	if err := v.liveReload.Publish(&livereload.Event{
 		Type: "reload",
-		Data: eventData,
+		Data: data,
 	}); err != nil {
-		v.options.Log.Warn("livereload: failed to reload", "err", err, "events", string(eventData))
+		v.options.Log.Warn("livereload: failed to reload", "err", err, "events", string(data))
 	}
 
 	return nil
