@@ -12,10 +12,12 @@ type (
 	Runtime  = goja.Runtime
 	Value    = goja.Value
 	Callable = goja.Callable
+	Program  = goja.Program
 )
 
 var (
 	AssertFunction = goja.AssertFunction
+	Compile        = goja.Compile
 	Undefined      = goja.Undefined
 )
 

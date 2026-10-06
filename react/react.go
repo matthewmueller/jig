@@ -643,47 +643,20 @@ func (v *Viewer) Render(w io.Writer, path string, props any) {
 }
 
 func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error) {
-	render, ok := v.renderCache.Get(path)
-	if !ok {
-		distfs := v.options.FS
-		// Transform the live path when we're not caching or when there's no
-		// embedded filesystem present. Often a static filesystem will be passed in
-		// during development but we still want the current version of the code.
-		if !v.options.Cache || distfs == nil {
-			absDir, err := filepath.Abs(v.options.Dir)
-			if err != nil {
-				return "", fmt.Errorf("react: failed to get absolute path: %w", err)
-			}
-			pages, err := v.options.FindPages(absDir, path)
-			if err != nil {
-				return "", fmt.Errorf("react: failed to find pages: %w", err)
-			}
-			if err := v.transformSSR(absDir, pages); err != nil {
-				return "", fmt.Errorf("react: failed to transform for ssr: %w", err)
-			}
-			distfs = os.DirFS(absDir)
-		}
-
-		// Read the code
-		code, err := fs.ReadFile(distfs, gopath.Join(v.options.OutDir, "ssr", path+".js"))
+	// Pooled VMs don't share globals, so evaluate the page in this VM when it's
+	// missing. Without caching, always evaluate to pick up the latest code.
+	render, err := getRenderFunction(vm, path)
+	if err != nil || !v.options.Cache {
+		program, err := v.compile(path)
 		if err != nil {
-			return "", fmt.Errorf("react: failed to read ssr file: %w", err)
+			return "", err
 		}
-
-		// Evaluate the code
-		if _, err = vm.RunString(string(code)); err != nil {
+		if _, err = vm.RunProgram(program); err != nil {
 			return "", fmt.Errorf("react: failed to evaluate code for %s: %w", path, err)
 		}
-
-		// Get the exported render function
 		render, err = getRenderFunction(vm, path)
 		if err != nil {
 			return "", fmt.Errorf("react: failed to get render function for %s: %w", path, err)
-		}
-
-		// Cache the render function when we're using the static filesystem
-		if v.options.Cache {
-			v.renderCache.Set(path, render)
 		}
 	}
 
@@ -696,6 +669,48 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 	html := result.String()
 	html = v.liveReload.Rewrite(html)
 	return html, nil
+}
+
+// compile the SSR code for path. Programs aren't tied to a VM, so they can be
+// cached and shared across the pool.
+func (v *Viewer) compile(path string) (*goja.Program, error) {
+	if program, ok := v.renderCache.Get(path); ok {
+		return program, nil
+	}
+	distfs := v.options.FS
+	// Transform the live path when we're not caching or when there's no
+	// embedded filesystem present. Often a static filesystem will be passed in
+	// during development but we still want the current version of the code.
+	if !v.options.Cache || distfs == nil {
+		absDir, err := filepath.Abs(v.options.Dir)
+		if err != nil {
+			return nil, fmt.Errorf("react: failed to get absolute path: %w", err)
+		}
+		pages, err := v.options.FindPages(absDir, path)
+		if err != nil {
+			return nil, fmt.Errorf("react: failed to find pages: %w", err)
+		}
+		if err := v.transformSSR(absDir, pages); err != nil {
+			return nil, fmt.Errorf("react: failed to transform for ssr: %w", err)
+		}
+		distfs = os.DirFS(absDir)
+	}
+
+	// Read the code
+	code, err := fs.ReadFile(distfs, gopath.Join(v.options.OutDir, "ssr", path+".js"))
+	if err != nil {
+		return nil, fmt.Errorf("react: failed to read ssr file: %w", err)
+	}
+
+	program, err := goja.Compile(path, string(code), false)
+	if err != nil {
+		return nil, fmt.Errorf("react: failed to compile code for %s: %w", path, err)
+	}
+
+	if v.options.Cache {
+		v.renderCache.Set(path, program)
+	}
+	return program, nil
 }
 
 var errorTemplate = template.Must(template.New("error.gohtml").Parse(`
