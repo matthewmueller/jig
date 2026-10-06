@@ -1126,3 +1126,84 @@ func TestLiveReload(t *testing.T) {
 	is.True(events[0].Op != "")
 	is.Equal(events[0].Path, "index.jsx")
 }
+
+func TestServeNodeModulesCached(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json":                    `{"name":"app","dependencies":{"greet":"*"}}`,
+		"node_modules/greet/package.json": `{"name":"greet","main":"index.js"}`,
+		"node_modules/greet/index.js":     `export const greeting = "v1"`,
+	}, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(true),
+		react.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	handler := viewer.Middleware(http.NotFoundHandler())
+	serve := func() string {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/node_modules/greet", nil))
+		is.Equal(rec.Code, http.StatusOK)
+		return rec.Body.String()
+	}
+	contains(t, serve(), `"v1"`)
+	// node_modules isn't watched, so the bundle is cached
+	is.NoErr(os.WriteFile(filepath.Join(dir, "node_modules", "greet", "index.js"), []byte(`export const greeting = "v2"`), 0644))
+	contains(t, serve(), `"v1"`)
+	// Installing packages changes package.json or the lockfile
+	is.NoErr(os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte(`{}`), 0644))
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(serve(), `"v2"`) {
+		if time.Now().After(deadline) {
+			t.Fatal("cache wasn't cleared after the lockfile changed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestServeNodeModulesETag(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json":                    `{"name":"app","dependencies":{"greet":"*"}}`,
+		"node_modules/greet/package.json": `{"name":"greet","main":"index.js"}`,
+		"node_modules/greet/index.js":     `export const greeting = "v1"`,
+	}, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	handler := viewer.Middleware(http.NotFoundHandler())
+	serve := func(etag string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/node_modules/greet", nil)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := serve("")
+	is.Equal(rec.Code, http.StatusOK)
+	is.Equal(rec.Header().Get("Cache-Control"), "no-cache")
+	etag := rec.Header().Get("ETag")
+	is.True(etag != "")
+	// Unchanged packages aren't sent again, even after a restart
+	rec = serve(etag)
+	is.Equal(rec.Code, http.StatusNotModified)
+	is.Equal(rec.Body.Len(), 0)
+	// Installing packages changes package.json or the lockfile
+	is.NoErr(os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte(`{}`), 0644))
+	rec = serve(etag)
+	is.Equal(rec.Code, http.StatusOK)
+	is.True(rec.Header().Get("ETag") != etag)
+}

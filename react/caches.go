@@ -37,3 +37,7 @@ func (c *serveCache) Get(key string) ([]byte, bool) {
 func (c *serveCache) Set(key string, value []byte) {
 	c.sm.Store(key, value)
 }
+
+func (c *serveCache) Clear() {
+	c.sm.Clear()
+}

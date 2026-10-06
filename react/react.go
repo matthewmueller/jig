@@ -3,7 +3,9 @@ package react
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -211,6 +214,7 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 		goja.New(opts.Log),
 		&renderCache{},
 		&serveCache{},
+		&serveCache{},
 		liveReload,
 		watcher,
 		eg,
@@ -245,6 +249,7 @@ type Viewer struct {
 	pool        *goja.Pool
 	renderCache *renderCache
 	serveCache  *serveCache
+	moduleCache *serveCache
 	liveReload  livereload.LiveReload
 	watcher     watch.Watcher
 	eg          *errgroup.Group
@@ -441,6 +446,21 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 	return result.OutputFiles, nil
 }
 
+// serveNodeModule returns the browser code for a package in node_modules.
+// node_modules isn't watched, so bundles are cached until a package manifest
+// changes.
+func (v *Viewer) serveNodeModule(module string) ([]byte, error) {
+	if code, ok := v.moduleCache.Get(module); ok {
+		return code, nil
+	}
+	code, err := v.transformNodeModule(v.options.Dir, module)
+	if err != nil {
+		return nil, err
+	}
+	v.moduleCache.Set(module, code)
+	return code, nil
+}
+
 func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 	const prefix = "/node_modules/"
 
@@ -608,7 +628,19 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			code, err := v.transformNodeModule(v.options.Dir, module)
+			// Let browsers revalidate packages across restarts without rebuilding
+			etag, err := packageETag(v.options.Dir)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("ETag", etag)
+			w.Header().Set("Cache-Control", "no-cache")
+			if r.Header.Get("If-None-Match") == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			code, err := v.serveNodeModule(module)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -790,7 +822,54 @@ type reloadEvent struct {
 	Path string `json:"path"`
 }
 
+// Files that change when packages are installed
+var packageFiles = []string{
+	"package.json",
+	"package-lock.json",
+	"yarn.lock",
+	"pnpm-lock.yaml",
+	"bun.lock",
+}
+
+// packageETag hashes the package files in dir, which change when packages are
+// installed, and the versions of the modules that build them
+func packageETag(dir string) (string, error) {
+	hash := sha256.New()
+	// Upgrading views or esbuild can change the bundles. Local replace
+	// directives have no version, so changes to those aren't detected.
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, module := range append([]*debug.Module{&info.Main}, info.Deps...) {
+			switch module.Path {
+			case "github.com/matthewmueller/views", "github.com/evanw/esbuild":
+				if module.Replace != nil {
+					module = module.Replace
+				}
+				hash.Write([]byte(module.Path + "@" + module.Version + "\n"))
+			}
+		}
+	}
+	for _, name := range packageFiles {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return "", err
+		}
+		hash.Write([]byte(name))
+		hash.Write(data)
+	}
+	return `"` + hex.EncodeToString(hash.Sum(nil)[:8]) + `"`, nil
+}
+
 func (v *Viewer) onChange(events []watch.Event) error {
+	for _, event := range events {
+		if slices.Contains(packageFiles, filepath.Base(event.Name)) {
+			v.moduleCache.Clear()
+			break
+		}
+	}
+
 	// Removed files don't need a reload
 	var reloads []reloadEvent
 	for _, event := range events {
