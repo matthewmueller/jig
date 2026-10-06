@@ -42,27 +42,33 @@ func run(log *slog.Logger) error {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		viewer.Render(w, "index.tsx", map[string]any{
+		if err := viewer.Render(r.Context(), w, "index.tsx", map[string]any{
 			"name": "Matt",
-		})
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	router.Get("/dashboard", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		viewer.Render(w, "dashboard/dashboard.tsx", map[string]any{
+		if err := viewer.Render(r.Context(), w, "dashboard/dashboard.tsx", map[string]any{
 			"name": "Matt",
-		})
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	router.Get("/about", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		viewer.Render(w, "about.tsx", map[string]any{
+		if err := viewer.Render(r.Context(), w, "about.tsx", map[string]any{
 			"name": "Max",
-		})
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	fmt.Println("Listening on http://localhost:8000")
 	return http.ListenAndServe(":8000", router)

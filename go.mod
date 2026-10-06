@@ -4,7 +4,6 @@ go 1.26.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
-	github.com/buildkite/terminal-to-html/v3 v3.16.8
 	github.com/dop251/goja v0.0.0-20260911104922-fabc3b8078ad
 	github.com/evanw/esbuild v0.27.2
 	github.com/fsnotify/fsnotify v1.6.0

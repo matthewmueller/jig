@@ -44,7 +44,6 @@ type Error struct {
 
 func (e *Error) Error() string {
 	errors := api.FormatMessages(e.messages, api.FormatMessagesOptions{
-		Color:         true,
 		Kind:          api.ErrorMessage,
 		TerminalWidth: 120,
 	})

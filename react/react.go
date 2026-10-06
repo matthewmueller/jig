@@ -2,11 +2,11 @@ package react
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/buildkite/terminal-to-html/v3"
 	"github.com/matthewmueller/cjs"
 	"github.com/matthewmueller/logs"
 	"github.com/matthewmueller/views/internal/esbuild"
@@ -688,22 +687,27 @@ func (v *Viewer) serveDOM(path string) ([]byte, error) {
 	return code, nil
 }
 
-func (v *Viewer) Render(w io.Writer, path string, props any) {
+// Render the page at path with props into w. Nothing is written when an error
+// is returned. Errors thrown by components render the page's error view.
+func (v *Viewer) Render(ctx context.Context, w io.Writer, path string, props any) error {
 	vm := v.pool.Acquire()
-	defer v.pool.Release(vm)
 
-	// Render page
+	// Stop the render when the context is canceled
+	stop := context.AfterFunc(ctx, func() {
+		vm.Interrupt(ctx.Err())
+	})
 	html, err := v.render(vm, path, props)
+	// Interrupts skip JS finally blocks, which can leave the VM in a bad state,
+	// so only reuse VMs that weren't interrupted
+	if stop() {
+		v.pool.Release(vm)
+	}
 	if err != nil {
-		v.renderError(w, path, fmt.Errorf("react: unable to render page %q: %w", path, err))
-		return
+		return fmt.Errorf("react: unable to render page %q: %w", path, err)
 	}
 
-	// Write the result
-	if _, err = io.WriteString(w, html); err != nil {
-		v.options.Log.Error("react: unable to write rendered output", "err", err)
-		return
-	}
+	_, err = io.WriteString(w, html)
+	return err
 }
 
 func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error) {
@@ -783,52 +787,6 @@ func (v *Viewer) compile(path string) (*goja.Program, error) {
 		v.renderCache.Set(path, program)
 	}
 	return program, nil
-}
-
-var errorTemplate = template.Must(template.New("error.gohtml").Parse(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>{{ $.Title }}</title>
-	<style>
-		body {
-			font-family: ui-monospace, Menlo, monospace;
-		}
-		pre {
-			white-space: pre-wrap;
-		}
-	</style>
-</head>
-<body>
-	<h1>{{ .Title }}</h1>
-	<pre id="error-message">{{ $.Error }}</pre>
-</body>
-</html>
-`))
-
-type errorData struct {
-	Title string
-	Error template.HTML
-}
-
-func (v *Viewer) renderError(w io.Writer, path string, err error) {
-	errorHtml := terminal.Render([]byte(err.Error()))
-	htmlBuffer := new(bytes.Buffer)
-	data := errorData{
-		Title: fmt.Sprintf("Unable to render %s", path),
-		Error: template.HTML(errorHtml),
-	}
-	if err := errorTemplate.Execute(htmlBuffer, data); err != nil {
-		v.options.Log.Error("react: unable to write render error page", "err", err)
-		return
-	}
-	html := v.liveReload.Rewrite(htmlBuffer.String())
-	if _, err = io.WriteString(w, html); err != nil {
-		v.options.Log.Error("react: unable to write rendered error page", "err", err)
-		return
-	}
 }
 
 func filterReloadEvents(events []watch.Event) (filtered []watch.Event) {

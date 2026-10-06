@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/livebud/npm"
@@ -61,7 +62,7 @@ func TestRenderBasic(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
 	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script><script async="" type="module" src="/.live"></script></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
 	diff.TestString(t, actual.String(), expect)
 }
@@ -96,7 +97,7 @@ func TestRenderMultiple(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err := doc.Find("#root").Html()
@@ -108,7 +109,7 @@ func TestRenderMultiple(t *testing.T) {
 	diff.TestString(t, propsText, expectProps)
 
 	actual = new(bytes.Buffer)
-	viewer.Render(actual, "about.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, actual, "about.jsx", map[string]any{"name": "World"}))
 	doc, err = goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err = doc.Find("#root").Html()
@@ -120,7 +121,7 @@ func TestRenderMultiple(t *testing.T) {
 	diff.TestString(t, propsText, expectProps)
 
 	actual = new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
 	doc, err = goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err = doc.Find("#root").Html()
@@ -132,7 +133,7 @@ func TestRenderMultiple(t *testing.T) {
 	diff.TestString(t, propsText, expectProps)
 
 	actual = new(bytes.Buffer)
-	viewer.Render(actual, "about.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, actual, "about.jsx", map[string]any{"name": "World"}))
 	doc, err = goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err = doc.Find("#root").Html()
@@ -172,7 +173,7 @@ func TestRenderEnv(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", nil)
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -217,7 +218,7 @@ func TestRenderDefaultEnv(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", nil)
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -263,7 +264,7 @@ func TestRenderMissingEnv(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", nil)
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -308,7 +309,7 @@ func TestRenderImportTSX(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", nil)
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -397,7 +398,7 @@ func TestRenderImportGenericFormTSX(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", nil)
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -449,7 +450,7 @@ func TestRenderProduction(t *testing.T) {
 
 	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
 	diff.TestString(t, actual.String(), expect)
 }
 
@@ -534,13 +535,16 @@ func TestRenderConcurrent(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	// Warm the cache
-	viewer.Render(new(bytes.Buffer), "index.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, new(bytes.Buffer), "index.jsx", map[string]any{"name": "World"}))
 	var wg sync.WaitGroup
 	for range 16 {
 		wg.Go(func() {
 			actual := new(bytes.Buffer)
-			viewer.Render(actual, "index.jsx", map[string]any{"name": "World"})
-			contains(t, actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`)
+			if err := viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}); err != nil {
+				t.Error(err)
+			} else if !strings.Contains(actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`) {
+				t.Errorf("unexpected render %q", actual.String())
+			}
 		})
 	}
 	wg.Wait()
@@ -569,7 +573,7 @@ func TestRenderPropsEscaped(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", map[string]any{"content": "</script><script>alert(1)</script>"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"content": "</script><script>alert(1)</script>"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	is.Equal(doc.Find("script:not([src])").Length(), 1)
@@ -608,7 +612,7 @@ func TestRenderPropsJSON(t *testing.T) {
 		Ptr   *int   `json:"ptr,omitzero"`
 	}
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", props{Name: "World"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", props{Name: "World"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -804,11 +808,11 @@ func TestRenderErrorKeepsErrorView(t *testing.T) {
 	})
 	// The error view fails, so the default error view is used
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", map[string]any{"fail": "error view fails"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"fail": "error view fails"}))
 	contains(t, actual.String(), "An error occurred: <!-- -->error view fails")
 	// The next error still uses the custom error view
 	actual = new(bytes.Buffer)
-	viewer.Render(actual, "index.jsx", map[string]any{"fail": "boom"})
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"fail": "boom"}))
 	contains(t, actual.String(), "Custom: <!-- -->boom")
 }
 
@@ -841,13 +845,18 @@ func TestRenderConcurrentDev(t *testing.T) {
 	for range 64 {
 		wg.Go(func() {
 			actual := new(bytes.Buffer)
-			viewer.Render(actual, "index.jsx", map[string]any{"name": "World"})
-			contains(t, actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`)
+			if err := viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}); err != nil {
+				t.Error(err)
+			} else if !strings.Contains(actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`) {
+				t.Errorf("unexpected render %q", actual.String())
+			}
 		})
 		wg.Go(func() {
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil))
-			contains(t, rec.Body.String(), `"Hello, "`)
+			if !strings.Contains(rec.Body.String(), `"Hello, "`) {
+				t.Errorf("unexpected client code %.100q", rec.Body.String())
+			}
 		})
 	}
 	wg.Wait()
@@ -900,7 +909,7 @@ func TestBuild(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	viewer.Render(actual, "about.jsx", map[string]any{"name": "World"})
+	is.NoErr(viewer.Render(ctx, actual, "about.jsx", map[string]any{"name": "World"}))
 	contains(t, actual.String(), `<div id="root"><div>I&#x27;m <!-- -->World<!-- -->!</div></div>`)
 	handler := viewer.Middleware(http.NotFoundHandler())
 	rec := httptest.NewRecorder()
@@ -982,4 +991,67 @@ func TestBuildMinifyProductionReact(t *testing.T) {
 		is.NoErr(err)
 		is.True(!strings.Contains(string(code), "Invalid hook call"))
 	}
+}
+
+func TestRenderMissingPage(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	err = viewer.Render(ctx, actual, "missing.jsx", nil)
+	is.True(errors.Is(err, fs.ErrNotExist))
+	is.Equal(actual.Len(), 0)
+}
+
+func TestRenderCanceled(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"loop.jsx": `
+			import React from 'react';
+			export default function Loop() {
+				while (true) {}
+			}
+		`,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithCache(true),
+		react.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	timeoutCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	actual := new(bytes.Buffer)
+	err = viewer.Render(timeoutCtx, actual, "loop.jsx", nil)
+	is.True(errors.Is(err, context.DeadlineExceeded))
+	is.Equal(actual.Len(), 0)
+	// Other renders still work
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	contains(t, actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`)
 }
