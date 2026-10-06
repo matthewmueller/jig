@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/livebud/npm"
@@ -684,6 +685,83 @@ func TestServeNodeModulesProduction(t *testing.T) {
 	handler := viewer.Middleware(http.NotFoundHandler())
 	req := httptest.NewRequest(http.MethodGet, "/node_modules/react", nil)
 	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusNotFound)
+}
+
+func TestServeStaticJSPassthrough(t *testing.T) {
+	is := is.New(t)
+	root := t.TempDir()
+	dir := filepath.Join(root, "app")
+	is.NoErr(virt.Write(virt.Map{
+		"secret.jsx":       `export default "hunter2"`,
+		"app/package.json": packageJson,
+		"app/index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+	}, root))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithCache(true),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	handler := viewer.Middleware(http.NotFoundHandler())
+	// Non-page scripts are left to the next handler
+	req := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusNotFound)
+	// Missing pages too
+	req = httptest.NewRequest(http.MethodGet, "/missing.jsx.js", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusNotFound)
+	// Pages outside the directory aren't built
+	req = httptest.NewRequest(http.MethodGet, "/../secret.jsx.js", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusNotFound)
+	is.True(!strings.Contains(rec.Body.String(), "hunter2"))
+	// Pages are still served
+	req = httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusOK)
+	contains(t, rec.Body.String(), `"Hello, "`)
+}
+
+func TestServeFS(t *testing.T) {
+	is := is.New(t)
+	viewer, err := react.Load(
+		react.WithDir(t.TempDir()),
+		react.WithWatch(false),
+		react.WithCache(true),
+		react.WithFS(fstest.MapFS{
+			"dist/dom/index.jsx.js": {Data: []byte(`import "./chunk-ABC.js"`)},
+			"dist/dom/chunk-ABC.js": {Data: []byte(`console.log("chunk")`)},
+		}),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	handler := viewer.Middleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "/chunk-ABC.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusOK)
+	is.Equal(rec.Body.String(), `console.log("chunk")`)
+	req = httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	is.Equal(rec.Code, http.StatusNotFound)
 }

@@ -354,7 +354,9 @@ type domEntryData struct {
 	Entry string
 }
 
-func (v *Viewer) transformDOM(absDir string, entries ...string) error {
+// transformDOM builds entries for the browser. Code is only split into shared
+// chunks when split is set, since chunks can only be served from a full build.
+func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) error {
 	plugins := []esbuild.Plugin{
 		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 			path := strings.TrimPrefix(args.Path, "entry:")
@@ -399,7 +401,7 @@ func (v *Viewer) transformDOM(absDir string, entries ...string) error {
 		EntryPointsAdvanced: entrypoints,
 		AbsWorkingDir:       absDir,
 		Bundle:              true,
-		Splitting:           true,
+		Splitting:           split && v.options.Minify,
 		Outdir:              filepath.Join(v.options.OutDir, "dom"),
 		Write:               true,
 		Format:              esbuild.FormatESModule,
@@ -415,7 +417,6 @@ func (v *Viewer) transformDOM(absDir string, entries ...string) error {
 	}
 	// Development build
 	if !v.options.Minify {
-		buildOptions.Splitting = false
 		buildOptions.Plugins = append(
 			buildOptions.Plugins,
 			esbuild.ExternalNodeModules("/node_modules/"),
@@ -551,7 +552,7 @@ func (v *Viewer) Build(paths ...string) error {
 	if err := v.transformSSR(absDir, pages); err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
-	if err := v.transformDOM(absDir, pages.Entries()...); err != nil {
+	if err := v.transformDOM(absDir, true, pages.Entries()...); err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
 	return nil
@@ -583,51 +584,66 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Forward along non-JS requests
-		if !strings.HasSuffix(r.URL.Path, ".js") {
+		// Forward along non-JS requests and invalid paths
+		path, ok := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".js")
+		if !ok || !fs.ValidPath(path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		path := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".js")
-		code, ok := v.serveCache.Get(path)
-		if !ok {
-			distfs := v.options.FS
-			// Transform the live path when we're not caching or when there's no
-			// embedded filesystem present. Often a static filesystem will be passed in
-			// during development but we still want the current version of the code.
-			if !v.options.Cache || distfs == nil {
-				if err := v.transformDOM(v.options.Dir, path); err != nil {
-					if errors.Is(err, fs.ErrNotExist) {
-						next.ServeHTTP(w, r)
-						return
-					}
-					// TODO: javascript-friendly error message
-					consoleError(w, "react: failed to transform for dom: %s", err.Error())
-					return
-				}
-				distfs = os.DirFS(v.options.Dir)
-			}
-
-			// Read the code
-			transformedCode, err := fs.ReadFile(distfs, gopath.Join(v.options.OutDir, "dom", path+".js"))
-			if err != nil {
-				consoleError(w, "react: failed to read dom file: %s", err.Error())
+		code, err := v.serveDOM(path)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				next.ServeHTTP(w, r)
 				return
 			}
-
-			// Cache the transformed code
-			if v.options.Cache {
-				v.serveCache.Set(path, transformedCode)
-			}
-
-			code = transformedCode
+			consoleError(w, "react: failed to serve %s: %s", r.URL.Path, err.Error())
+			return
 		}
 
 		// Serve the code
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Write(code)
 	}))
+}
+
+// serveDOM returns the browser code for path. Returns fs.ErrNotExist when path
+// isn't a page or a built file.
+func (v *Viewer) serveDOM(path string) ([]byte, error) {
+	if code, ok := v.serveCache.Get(path); ok {
+		return code, nil
+	}
+
+	// Serve pages and shared chunks from the prebuilt filesystem
+	if v.options.Cache && v.options.FS != nil {
+		code, err := fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "dom", path+".js"))
+		if err != nil {
+			return nil, err
+		}
+		v.serveCache.Set(path, code)
+		return code, nil
+	}
+
+	// Otherwise build the page on demand
+	switch gopath.Ext(path) {
+	case ".jsx", ".tsx":
+	default:
+		return nil, fs.ErrNotExist
+	}
+	if _, err := os.Stat(filepath.Join(v.options.Dir, path)); err != nil {
+		return nil, err
+	}
+	if err := v.transformDOM(v.options.Dir, false, path); err != nil {
+		return nil, err
+	}
+	code, err := os.ReadFile(filepath.Join(v.options.Dir, v.options.OutDir, "dom", path+".js"))
+	if err != nil {
+		return nil, err
+	}
+	if v.options.Cache {
+		v.serveCache.Set(path, code)
+	}
+	return code, nil
 }
 
 func (v *Viewer) Render(w io.Writer, path string, props any) {
