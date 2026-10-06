@@ -30,10 +30,10 @@ var debounceDelay = 20 * time.Millisecond
 type Watcher interface {
 	Close() error
 	Watch(fn func(events []Event) error) error
-	Ignore(fn func(path string) bool)
 }
 
-func New(log *slog.Logger, dir string) (*FileWatcher, error) {
+// New watches dir recursively, skipping ignored paths
+func New(log *slog.Logger, dir string, ignore func(path string) bool) (*FileWatcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func New(log *slog.Logger, dir string) (*FileWatcher, error) {
 	fw := &FileWatcher{
 		log:           log,
 		watcher:       watcher,
-		ignores:       []func(path string) bool{},
+		ignore:        ignore,
 		duplicates:    map[string]struct{}{},
 		pendingEvents: []Event{},
 		debounce:      debounce.New(debounceDelay),
@@ -59,7 +59,7 @@ type FileWatcher struct {
 	log           *slog.Logger
 	watcher       *fsnotify.Watcher
 	duplicates    map[string]struct{}
-	ignores       []func(path string) bool
+	ignore        func(path string) bool
 	pendingEvents []Event
 	debounce      func(func())
 	errorCh       chan error
@@ -69,15 +69,11 @@ func (w *FileWatcher) Close() error {
 	return w.watcher.Close()
 }
 
-func (w *FileWatcher) Ignore(fn func(path string) bool) {
-	w.ignores = append(w.ignores, fn)
-}
-
 func (w *FileWatcher) Watch(fn func(events []Event) error) error {
 	for {
 		select {
 		case event := <-w.watcher.Events:
-			if w.shouldIgnore(event.Name) {
+			if w.ignore(event.Name) {
 				continue
 			}
 			w.pendingEvents = append(w.pendingEvents, event)
@@ -144,15 +140,6 @@ func (w *FileWatcher) handleError(err error) error {
 	return nil
 }
 
-func (w *FileWatcher) shouldIgnore(path string) bool {
-	for _, ignore := range w.ignores {
-		if ignore(path) {
-			return true
-		}
-	}
-	return false
-}
-
 func (w *FileWatcher) addPath(path string) error {
 	stat, err := os.Stat(path)
 	if err != nil {
@@ -177,11 +164,12 @@ func (w *FileWatcher) addDir(dir string) error {
 	}
 	eg := new(errgroup.Group)
 	for _, d := range des {
-		if !d.IsDir() {
+		path := filepath.Join(dir, d.Name())
+		if !d.IsDir() || w.ignore(path) {
 			continue
 		}
 		eg.Go(func() error {
-			return w.addDir(filepath.Join(dir, d.Name()))
+			return w.addDir(path)
 		})
 	}
 	return eg.Wait()

@@ -190,15 +190,14 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 	// Start the watcher
 	watcher := watch.Noop()
 	if opts.Watch {
-		watcher, err = watch.New(opts.Log, opts.Dir)
+		outDir := filepath.Join(opts.Dir, opts.OutDir)
+		gitignored := gitignore.From(opts.Dir)
+		watcher, err = watch.New(opts.Log, opts.Dir, func(path string) bool {
+			return path == outDir || strings.HasPrefix(path, outDir+string(filepath.Separator)) || gitignored(path)
+		})
 		if err != nil {
 			return nil, err
 		}
-		outDir := filepath.Join(opts.Dir, opts.OutDir)
-		watcher.Ignore(func(path string) bool {
-			return strings.HasPrefix(path, outDir)
-		})
-		watcher.Ignore(gitignore.From(opts.Dir))
 	}
 
 	viewer = &Viewer{

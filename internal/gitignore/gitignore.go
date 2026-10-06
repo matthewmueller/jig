@@ -14,17 +14,23 @@ var alwaysIgnore = []string{
 	".DS_Store",
 }
 
-var defaultIgnore = gitignore.CompileIgnoreLines(alwaysIgnore...).MatchesPath
-
+// From returns a matcher for absolute paths within dir.
+//
 // TODO: this isn't comprehensive enough, it doesn't handle parent .gitignores
 // or the global gitignore in git config.
 func From(dir string) (ignore func(path string) bool) {
-	code, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
-	if err != nil {
-		return defaultIgnore
+	lines := alwaysIgnore
+	if code, err := os.ReadFile(filepath.Join(dir, ".gitignore")); err == nil {
+		lines = append(strings.Split(string(code), "\n"), alwaysIgnore...)
 	}
-	lines := strings.Split(string(code), "\n")
-	lines = append(lines, alwaysIgnore...)
 	ignorer := gitignore.CompileIgnoreLines(lines...)
-	return ignorer.MatchesPath
+	return func(path string) bool {
+		// Patterns are relative to dir
+		rel, err := filepath.Rel(dir, path)
+		if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+			return false
+		}
+		// Also try as a directory, so "dist/" matches the dist directory itself
+		return ignorer.MatchesPath(rel) || ignorer.MatchesPath(rel+"/")
+	}
 }
