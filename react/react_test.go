@@ -765,3 +765,46 @@ func TestServeFS(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	is.Equal(rec.Code, http.StatusNotFound)
 }
+
+func TestRenderErrorKeepsErrorView(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				throw new Error(props.fail);
+			}
+		`,
+		"error.jsx": `
+			import React from 'react';
+			export default function Error(props) {
+				if (props.error.message === "error view fails") {
+					throw props.error;
+				}
+				return <div>Custom: {props.error.message}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithCache(true),
+		react.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	// The error view fails, so the default error view is used
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", map[string]any{"fail": "error view fails"})
+	contains(t, actual.String(), "An error occurred: <!-- -->error view fails")
+	// The next error still uses the custom error view
+	actual = new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", map[string]any{"fail": "boom"})
+	contains(t, actual.String(), "Custom: <!-- -->boom")
+}

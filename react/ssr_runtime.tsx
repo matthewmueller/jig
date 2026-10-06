@@ -73,9 +73,9 @@ function renderError(page: Page, context: Context, error: Error): string {
     </Context.Provider>,
   );
   if (contentHtml instanceof Error) {
-    // Try again with the default error handler
-    page.ErrorView = defaultError;
-    return renderError(page, context, contentHtml);
+    // Try again with the default error handler. Copy the page since it's
+    // shared across renders.
+    return renderError({ ...page, ErrorView: defaultError }, context, contentHtml);
   }
   // TODO: we can probably dedupe some of this
   const heads: JSX.Element[] = [];
@@ -98,8 +98,7 @@ function renderError(page: Page, context: Context, error: Error): string {
     </LayoutView>,
   );
   if (html instanceof Error) {
-    page.LayoutView = defaultLayout;
-    return renderError(page, context, html);
+    return renderError({ ...page, LayoutView: defaultLayout }, context, html);
   }
   return `<!doctype html>` + html;
 }
