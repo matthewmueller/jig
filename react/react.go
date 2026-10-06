@@ -214,7 +214,6 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 		goja.New(opts.Log),
 		&renderCache{},
 		&serveCache{},
-		&serveCache{},
 		liveReload,
 		watcher,
 		eg,
@@ -249,7 +248,6 @@ type Viewer struct {
 	pool        *goja.Pool
 	renderCache *renderCache
 	serveCache  *serveCache
-	moduleCache *serveCache
 	liveReload  livereload.LiveReload
 	watcher     watch.Watcher
 	eg          *errgroup.Group
@@ -446,21 +444,6 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 	return result.OutputFiles, nil
 }
 
-// serveNodeModule returns the browser code for a package in node_modules.
-// node_modules isn't watched, so bundles are cached until a package manifest
-// changes.
-func (v *Viewer) serveNodeModule(module string) ([]byte, error) {
-	if code, ok := v.moduleCache.Get(module); ok {
-		return code, nil
-	}
-	code, err := v.transformNodeModule(v.options.Dir, module)
-	if err != nil {
-		return nil, err
-	}
-	v.moduleCache.Set(module, code)
-	return code, nil
-}
-
 func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 	const prefix = "/node_modules/"
 
@@ -640,7 +623,7 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
-			code, err := v.serveNodeModule(module)
+			code, err := v.transformNodeModule(v.options.Dir, module)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -677,21 +660,15 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 // serveDOM returns the browser code for path. Returns fs.ErrNotExist when path
 // isn't a page or a built file.
 func (v *Viewer) serveDOM(path string) ([]byte, error) {
+	// Serve pages and shared chunks from the prebuilt filesystem
+	if v.options.Cache && v.options.FS != nil {
+		return fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "dom", path+".js"))
+	}
+
+	// Otherwise build the page on demand, caching the build when enabled
 	if code, ok := v.serveCache.Get(path); ok {
 		return code, nil
 	}
-
-	// Serve pages and shared chunks from the prebuilt filesystem
-	if v.options.Cache && v.options.FS != nil {
-		code, err := fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "dom", path+".js"))
-		if err != nil {
-			return nil, err
-		}
-		v.serveCache.Set(path, code)
-		return code, nil
-	}
-
-	// Otherwise build the page on demand
 	switch gopath.Ext(path) {
 	case ".jsx", ".tsx":
 	default:
@@ -831,29 +808,17 @@ var packageFiles = []string{
 	"bun.lock",
 }
 
-// packageETag hashes the package files in dir, which change when packages are
-// installed, and the versions of the modules that build them
+// packageETag hashes what node_modules bundles are built from: the package
+// files in dir, which change when packages are installed, and the versions of
+// the modules that build them
 func packageETag(dir string) (string, error) {
 	hash := sha256.New()
-	// Upgrading views or esbuild can change the bundles. Local replace
-	// directives have no version, so changes to those aren't detected.
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, module := range append([]*debug.Module{&info.Main}, info.Deps...) {
-			switch module.Path {
-			case "github.com/matthewmueller/views", "github.com/evanw/esbuild":
-				if module.Replace != nil {
-					module = module.Replace
-				}
-				hash.Write([]byte(module.Path + "@" + module.Version + "\n"))
-			}
-		}
-	}
+	hash.Write([]byte(buildVersions()))
 	for _, name := range packageFiles {
 		data, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		} else if err != nil {
 			return "", err
 		}
 		hash.Write([]byte(name))
@@ -862,14 +827,36 @@ func packageETag(dir string) (string, error) {
 	return `"` + hex.EncodeToString(hash.Sum(nil)[:8]) + `"`, nil
 }
 
-func (v *Viewer) onChange(events []watch.Event) error {
-	for _, event := range events {
-		if slices.Contains(packageFiles, filepath.Base(event.Name)) {
-			v.moduleCache.Clear()
-			break
-		}
-	}
+// Modules whose upgrades can change node_modules bundles
+var buildModules = []string{
+	"github.com/matthewmueller/views",
+	"github.com/evanw/esbuild",
+}
 
+// buildVersions returns the versions of buildModules in this binary. Local
+// replace directives have no version, so changes to those aren't detected.
+func buildVersions() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	var versions strings.Builder
+	for _, module := range append([]*debug.Module{&info.Main}, info.Deps...) {
+		if !slices.Contains(buildModules, module.Path) {
+			continue
+		}
+		if module.Replace != nil {
+			module = module.Replace
+		}
+		versions.WriteString(module.Path)
+		versions.WriteString("@")
+		versions.WriteString(module.Version)
+		versions.WriteString("\n")
+	}
+	return versions.String()
+}
+
+func (v *Viewer) onChange(events []watch.Event) error {
 	// Removed files don't need a reload
 	var reloads []reloadEvent
 	for _, event := range events {
