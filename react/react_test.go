@@ -3,6 +3,7 @@ package react_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -538,4 +539,75 @@ func TestRenderConcurrent(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestRenderPropsEscaped(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>{props.content}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", map[string]any{"content": "</script><script>alert(1)</script>"})
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	is.Equal(doc.Find("script:not([src])").Length(), 1)
+	propsText := doc.Find("#react-props").Text()
+	is.True(!strings.Contains(propsText, "</"))
+	var props map[string]string
+	is.NoErr(json.Unmarshal([]byte(propsText), &props))
+	is.Equal(props["content"], "</script><script>alert(1)</script>")
+}
+
+func TestRenderPropsJSON(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>{Object.keys(props).join(",")}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	type props struct {
+		Name  string `json:"name"`
+		Empty string `json:"empty,omitempty"`
+		Ptr   *int   `json:"ptr,omitzero"`
+	}
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "index.jsx", props{Name: "World"})
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	rootHTML, err := doc.Find("#root").Html()
+	is.NoErr(err)
+	diff.TestString(t, rootHTML, `<div>name</div>`)
+	diff.TestString(t, doc.Find("#react-props").Text(), `{"name":"World"}`)
 }

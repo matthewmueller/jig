@@ -104,8 +104,9 @@ function renderError(page: Page, context: Context, error: Error): string {
   return `<!doctype html>` + html;
 }
 
-export function renderHtml(page: Page, props: unknown): string {
+export function renderHtml(page: Page, propsJSON: string): string {
   let { LayoutView, EntryView, clientRoute } = page;
+  const props: unknown = JSON.parse(propsJSON);
   const context: Context = {
     styles: {},
     heads: {},
@@ -152,7 +153,7 @@ export function renderHtml(page: Page, props: unknown): string {
           key="react-props"
           type="application/json"
           id="react-props"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(props) }}
+          dangerouslySetInnerHTML={{ __html: propsJSON }}
         ></script>
       )}
     </LayoutView>,

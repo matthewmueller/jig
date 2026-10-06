@@ -22,6 +22,6 @@ const page: Page = {
   {{- end }}
 }
 
-export function render(props) {
-  return renderHtml(page, props)
+export function render(propsJSON: string) {
+  return renderHtml(page, propsJSON)
 }

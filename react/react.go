@@ -3,6 +3,7 @@ package react
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -660,8 +661,15 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 		}
 	}
 
+	// Encode props with Go's JSON rules so struct tags are respected, SSR and
+	// the browser see the same props, and "<" is escaped for the script tag.
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		return "", fmt.Errorf("react: unable to encode props: %w", err)
+	}
+
 	// Call the render function
-	result, err := render(goja.Undefined(), vm.ToValue(props))
+	result, err := render(goja.Undefined(), vm.ToValue(string(propsJSON)))
 	if err != nil {
 		return "", fmt.Errorf("react: unable to render the component: %w", err)
 	}
