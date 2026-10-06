@@ -15,6 +15,7 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -259,7 +260,8 @@ type ssrEntryData struct {
 	Page *Page
 }
 
-func (v *Viewer) transformSSR(absDir string, pages Pages) error {
+// transformSSR builds pages for the server. Outputs are kept in memory.
+func (v *Viewer) transformSSR(absDir string, pages Pages) ([]esbuild.OutputFile, error) {
 	plugins := []esbuild.Plugin{
 		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 			entryPath := strings.TrimPrefix(args.Path, "entry:")
@@ -295,16 +297,22 @@ func (v *Viewer) transformSSR(absDir string, pages Pages) error {
 		}),
 		esbuild.JSX("runtime:ssr_runtime.tsx"),
 	}
+	list := pages.List()
+	outputs := make([][]esbuild.OutputFile, len(list))
 	eg := new(errgroup.Group)
-	for _, page := range pages.List() {
-		eg.Go(func() error {
-			return v.transformPageSSR(plugins, absDir, page.Entry)
+	for i, page := range list {
+		eg.Go(func() (err error) {
+			outputs[i], err = v.transformPageSSR(plugins, absDir, page.Entry)
+			return err
 		})
 	}
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	return slices.Concat(outputs...), nil
 }
 
-func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry string) error {
+func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry string) ([]esbuild.OutputFile, error) {
 	// Build the file
 	result, err := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: []esbuild.EntryPoint{
@@ -317,7 +325,6 @@ func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry
 		Bundle:            true,
 		Splitting:         false,
 		Outdir:            filepath.Join(v.options.OutDir, "ssr"),
-		Write:             true,
 		Format:            esbuild.FormatIIFE,
 		Target:            esbuild.ES2015,
 		MinifyWhitespace:  v.options.Minify,
@@ -331,14 +338,14 @@ func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry
 		Plugins:           plugins,
 	})
 	if err != nil {
-		return fmt.Errorf("react: failed to bundle ssr: %w", err)
+		return nil, fmt.Errorf("react: failed to bundle ssr: %w", err)
 	} else if len(result.OutputFiles) == 0 {
-		return fmt.Errorf("react: no output files after ssr bundle")
+		return nil, fmt.Errorf("react: no output files after ssr bundle")
 	}
 	for _, warning := range result.Warnings {
 		v.options.Log.Warn("esbuild warning", slog.String("message", warning.Text))
 	}
-	return nil
+	return result.OutputFiles, nil
 }
 
 //go:embed dom_entry.jsx.gotext
@@ -353,9 +360,10 @@ type domEntryData struct {
 	Entry string
 }
 
-// transformDOM builds entries for the browser. Code is only split into shared
-// chunks when split is set, since chunks can only be served from a full build.
-func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) error {
+// transformDOM builds entries for the browser. Outputs are kept in memory. Code
+// is only split into shared chunks when split is set, since chunks can only be
+// served from a full build.
+func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]esbuild.OutputFile, error) {
 	plugins := []esbuild.Plugin{
 		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 			path := strings.TrimPrefix(args.Path, "entry:")
@@ -402,7 +410,6 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) erro
 		Bundle:              true,
 		Splitting:           split && v.options.Minify,
 		Outdir:              filepath.Join(v.options.OutDir, "dom"),
-		Write:               true,
 		Format:              esbuild.FormatESModule,
 		Target:              esbuild.ES2023,
 		MinifyWhitespace:    v.options.Minify,
@@ -424,14 +431,14 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) erro
 	// Build the file
 	result, err := esbuild.Build(buildOptions)
 	if err != nil {
-		return fmt.Errorf("react: failed to bundle ssr: %w", err)
+		return nil, fmt.Errorf("react: failed to bundle ssr: %w", err)
 	} else if len(result.OutputFiles) == 0 {
-		return fmt.Errorf("react: no output files after ssr bundle")
+		return nil, fmt.Errorf("react: no output files after ssr bundle")
 	}
 	for _, warning := range result.Warnings {
 		v.options.Log.Warn("esbuild warning", slog.String("message", warning.Text))
 	}
-	return nil
+	return result.OutputFiles, nil
 }
 
 func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
@@ -548,13 +555,35 @@ func (v *Viewer) Build(paths ...string) error {
 	if err != nil {
 		return err
 	}
-	if err := v.transformSSR(absDir, pages); err != nil {
+	ssrFiles, err := v.transformSSR(absDir, pages)
+	if err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
-	if err := v.transformDOM(absDir, true, pages.Entries()...); err != nil {
+	domFiles, err := v.transformDOM(absDir, true, pages.Entries()...)
+	if err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
+	}
+	for _, file := range slices.Concat(ssrFiles, domFiles) {
+		if err := os.MkdirAll(filepath.Dir(file.Path), 0755); err != nil {
+			return fmt.Errorf("react: failed to build: %w", err)
+		}
+		if err := os.WriteFile(file.Path, file.Contents, 0644); err != nil {
+			return fmt.Errorf("react: failed to build: %w", err)
+		}
 	}
 	return nil
+}
+
+// outputFile finds the contents of the output file ending in path. esbuild
+// returns absolute paths with symlinks resolved, so compare the suffix.
+func outputFile(files []esbuild.OutputFile, path string) ([]byte, error) {
+	suffix := string(filepath.Separator) + filepath.FromSlash(path)
+	for _, file := range files {
+		if strings.HasSuffix(file.Path, suffix) {
+			return file.Contents, nil
+		}
+	}
+	return nil, fmt.Errorf("react: no output file for %q", path)
 }
 
 func (v *Viewer) Middleware(next http.Handler) http.Handler {
@@ -632,10 +661,11 @@ func (v *Viewer) serveDOM(path string) ([]byte, error) {
 	if _, err := os.Stat(filepath.Join(v.options.Dir, path)); err != nil {
 		return nil, err
 	}
-	if err := v.transformDOM(v.options.Dir, false, path); err != nil {
+	files, err := v.transformDOM(v.options.Dir, false, path)
+	if err != nil {
 		return nil, err
 	}
-	code, err := os.ReadFile(filepath.Join(v.options.Dir, v.options.OutDir, "dom", path+".js"))
+	code, err := outputFile(files, gopath.Join(v.options.OutDir, "dom", path+".js"))
 	if err != nil {
 		return nil, err
 	}
@@ -699,35 +729,36 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 	return html, nil
 }
 
+// readSSR reads the prebuilt SSR code for path from the filesystem when
+// caching, otherwise it builds the page to get the current version of the code.
+func (v *Viewer) readSSR(path string) ([]byte, error) {
+	if v.options.Cache && v.options.FS != nil {
+		code, err := fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "ssr", path+".js"))
+		if err != nil {
+			return nil, fmt.Errorf("react: failed to read ssr file: %w", err)
+		}
+		return code, nil
+	}
+	pages, err := v.options.FindPages(v.options.Dir, path)
+	if err != nil {
+		return nil, fmt.Errorf("react: failed to find pages: %w", err)
+	}
+	files, err := v.transformSSR(v.options.Dir, pages)
+	if err != nil {
+		return nil, fmt.Errorf("react: failed to transform for ssr: %w", err)
+	}
+	return outputFile(files, gopath.Join(v.options.OutDir, "ssr", path+".js"))
+}
+
 // compile the SSR code for path. Programs aren't tied to a VM, so they can be
 // cached and shared across the pool.
 func (v *Viewer) compile(path string) (*goja.Program, error) {
 	if program, ok := v.renderCache.Get(path); ok {
 		return program, nil
 	}
-	distfs := v.options.FS
-	// Transform the live path when we're not caching or when there's no
-	// embedded filesystem present. Often a static filesystem will be passed in
-	// during development but we still want the current version of the code.
-	if !v.options.Cache || distfs == nil {
-		absDir, err := filepath.Abs(v.options.Dir)
-		if err != nil {
-			return nil, fmt.Errorf("react: failed to get absolute path: %w", err)
-		}
-		pages, err := v.options.FindPages(absDir, path)
-		if err != nil {
-			return nil, fmt.Errorf("react: failed to find pages: %w", err)
-		}
-		if err := v.transformSSR(absDir, pages); err != nil {
-			return nil, fmt.Errorf("react: failed to transform for ssr: %w", err)
-		}
-		distfs = os.DirFS(absDir)
-	}
-
-	// Read the code
-	code, err := fs.ReadFile(distfs, gopath.Join(v.options.OutDir, "ssr", path+".js"))
+	code, err := v.readSSR(path)
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to read ssr file: %w", err)
+		return nil, err
 	}
 
 	program, err := goja.Compile(path, string(code), false)

@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -807,4 +810,101 @@ func TestRenderErrorKeepsErrorView(t *testing.T) {
 	actual = new(bytes.Buffer)
 	viewer.Render(actual, "index.jsx", map[string]any{"fail": "boom"})
 	contains(t, actual.String(), "Custom: <!-- -->boom")
+}
+
+func TestRenderConcurrentDev(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithCache(false),
+		react.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	handler := viewer.Middleware(http.NotFoundHandler())
+	var wg sync.WaitGroup
+	for range 64 {
+		wg.Go(func() {
+			actual := new(bytes.Buffer)
+			viewer.Render(actual, "index.jsx", map[string]any{"name": "World"})
+			contains(t, actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`)
+		})
+		wg.Go(func() {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil))
+			contains(t, rec.Body.String(), `"Hello, "`)
+		})
+	}
+	wg.Wait()
+	// Builds on demand stay in memory
+	_, err = os.Stat(filepath.Join(dir, "dist"))
+	is.True(errors.Is(err, fs.ErrNotExist))
+}
+
+func TestBuild(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+		"about.jsx": `
+			import React from 'react';
+			export default function About(props) {
+				return <div>I'm {props.name}!</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	builder, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithMinify(true),
+		react.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	is.NoErr(builder.Build("index.jsx", "about.jsx"))
+	is.NoErr(builder.Close())
+
+	// Serve from the built files
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithCache(true),
+		react.WithMinify(true),
+		react.WithLiveRoute(""),
+		react.WithFS(os.DirFS(dir)),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	viewer.Render(actual, "about.jsx", map[string]any{"name": "World"})
+	contains(t, actual.String(), `<div id="root"><div>I&#x27;m <!-- -->World<!-- -->!</div></div>`)
+	handler := viewer.Middleware(http.NotFoundHandler())
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil))
+	is.Equal(rec.Code, http.StatusOK)
+	contains(t, rec.Body.String(), "Hello, ")
 }
