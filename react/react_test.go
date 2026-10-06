@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1174,4 +1175,48 @@ func TestServeNodeModulesETag(t *testing.T) {
 	rec = serve(etag)
 	is.Equal(rec.Code, http.StatusOK)
 	is.True(rec.Header().Get("ETag") != etag)
+}
+
+func TestRenderHead(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return (
+					<div>
+						<head>
+							<title>Hello</title>
+							<meta charSet="utf-8" />
+							<meta name="description" content="A page" />
+						</head>
+						<h1>Hello, {props.name}!</h1>
+					</div>
+				);
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	logs := new(bytes.Buffer)
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithLiveRoute(""),
+		react.WithLog(slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	doc, err := goquery.NewDocumentFromReader(actual)
+	is.NoErr(err)
+	is.Equal(doc.Find("head title").Text(), "Hello")
+	is.Equal(doc.Find("head meta[charset]").Length(), 1)
+	is.Equal(doc.Find(`head meta[name="description"]`).AttrOr("content", ""), "A page")
+	is.Equal(logs.String(), "")
 }
