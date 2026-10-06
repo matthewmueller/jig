@@ -908,3 +908,43 @@ func TestBuild(t *testing.T) {
 	is.Equal(rec.Code, http.StatusOK)
 	contains(t, rec.Body.String(), "Hello, ")
 }
+
+func TestBuildCleansOutDir(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+		"dist/ssr/removed.jsx.js": `old`,
+		"dist/dom/chunk-OLD.js":   `old`,
+		"dist/other.txt":          `keep`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithMinify(true),
+		react.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	is.NoErr(viewer.Build("index.jsx"))
+	_, err = os.Stat(filepath.Join(dir, "dist", "ssr", "removed.jsx.js"))
+	is.True(errors.Is(err, fs.ErrNotExist))
+	_, err = os.Stat(filepath.Join(dir, "dist", "dom", "chunk-OLD.js"))
+	is.True(errors.Is(err, fs.ErrNotExist))
+	_, err = os.Stat(filepath.Join(dir, "dist", "ssr", "index.jsx.js"))
+	is.NoErr(err)
+	_, err = os.Stat(filepath.Join(dir, "dist", "dom", "index.jsx.js"))
+	is.NoErr(err)
+	_, err = os.Stat(filepath.Join(dir, "dist", "other.txt"))
+	is.NoErr(err)
+}

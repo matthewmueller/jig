@@ -563,6 +563,13 @@ func (v *Viewer) Build(paths ...string) error {
 	if err != nil {
 		return fmt.Errorf("react: failed to build: %w", err)
 	}
+	// Replace previous builds so removed pages and stale chunks aren't left
+	// behind. Only done once the build succeeds.
+	for _, dir := range []string{"ssr", "dom"} {
+		if err := os.RemoveAll(filepath.Join(absDir, v.options.OutDir, dir)); err != nil {
+			return fmt.Errorf("react: failed to build: %w", err)
+		}
+	}
 	for _, file := range slices.Concat(ssrFiles, domFiles) {
 		if err := os.MkdirAll(filepath.Dir(file.Path), 0755); err != nil {
 			return fmt.Errorf("react: failed to build: %w", err)
