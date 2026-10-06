@@ -439,7 +439,7 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 
 	// Build the file
 	result, err := esbuild.Build(esbuild.BuildOptions{
-		EntryPoints:   []string{module},
+		EntryPoints:   []string{"package:" + module},
 		AbsWorkingDir: absDir,
 		Bundle:        true,
 		Splitting:     false,
@@ -449,6 +449,7 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 		Platform:      esbuild.PlatformBrowser,
 		JSX:           esbuild.JSXAutomatic,
 		Plugins: []esbuild.Plugin{
+			esbuild.Package(),
 			esbuild.ExternalNodeModules(prefix, module),
 		},
 	})
@@ -565,9 +566,13 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if after, ok := strings.CutPrefix(r.URL.Path, "/node_modules/"); ok {
-			nodeModule := after
-			code, err := v.transformNodeModule(v.options.Dir, nodeModule)
+		// Unminified DOM builds import node_modules from this route
+		if module, ok := strings.CutPrefix(r.URL.Path, "/node_modules/"); ok && !v.options.Minify {
+			if !fs.ValidPath(module) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			code, err := v.transformNodeModule(v.options.Dir, module)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

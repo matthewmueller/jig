@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -610,4 +611,79 @@ func TestRenderPropsJSON(t *testing.T) {
 	is.NoErr(err)
 	diff.TestString(t, rootHTML, `<div>name</div>`)
 	diff.TestString(t, doc.Find("#react-props").Text(), `{"name":"World"}`)
+}
+
+func TestServeNodeModulesTraversal(t *testing.T) {
+	is := is.New(t)
+	root := t.TempDir()
+	dir := filepath.Join(root, "app")
+	is.NoErr(virt.Write(virt.Map{
+		"secret.json":      `{"password":"hunter2"}`,
+		"app/server.json":  `{"token":"abc123"}`,
+		"app/package.json": packageJson,
+		"app/index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+	}, root))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	handler := viewer.Middleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "/node_modules/react/../../secret.json", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusNotFound)
+	is.True(!strings.Contains(rec.Body.String(), "hunter2"))
+	// Bare paths must resolve as packages, not as files in the project
+	req = httptest.NewRequest(http.MethodGet, "/node_modules/server.json", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.True(!strings.Contains(rec.Body.String(), "abc123"))
+	// Packages still resolve, including subpath exports
+	req = httptest.NewRequest(http.MethodGet, "/node_modules/react-dom/client", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusOK)
+	contains(t, rec.Body.String(), "createRoot")
+}
+
+func TestServeNodeModulesProduction(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithMinify(true),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	// Minified builds bundle node_modules, so the route isn't needed
+	handler := viewer.Middleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodGet, "/node_modules/react", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	is.Equal(rec.Code, http.StatusNotFound)
 }
