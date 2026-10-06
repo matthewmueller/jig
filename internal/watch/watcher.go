@@ -7,7 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bep/debounce"
 	"github.com/fsnotify/fsnotify"
 	"golang.org/x/sync/errgroup"
 )
@@ -39,13 +38,9 @@ func New(log *slog.Logger, dir string, ignore func(path string) bool) (*FileWatc
 		return nil, err
 	}
 	fw := &FileWatcher{
-		log:           log,
-		watcher:       watcher,
-		ignore:        ignore,
-		duplicates:    map[string]struct{}{},
-		pendingEvents: []Event{},
-		debounce:      debounce.New(debounceDelay),
-		errorCh:       make(chan error),
+		log:     log,
+		watcher: watcher,
+		ignore:  ignore,
 	}
 	if err := fw.addPath(dir); err != nil {
 		return nil, err
@@ -56,46 +51,43 @@ func New(log *slog.Logger, dir string, ignore func(path string) bool) (*FileWatc
 var _ Watcher = (*FileWatcher)(nil)
 
 type FileWatcher struct {
-	log           *slog.Logger
-	watcher       *fsnotify.Watcher
-	duplicates    map[string]struct{}
-	ignore        func(path string) bool
-	pendingEvents []Event
-	debounce      func(func())
-	errorCh       chan error
+	log     *slog.Logger
+	watcher *fsnotify.Watcher
+	ignore  func(path string) bool
 }
 
 func (w *FileWatcher) Close() error {
 	return w.watcher.Close()
 }
 
+// Watch calls fn with batches of events until the watcher is closed. Events
+// are debounced and handled in this goroutine, so fn calls never overlap.
 func (w *FileWatcher) Watch(fn func(events []Event) error) error {
+	var pending []Event
+	timer := time.NewTimer(debounceDelay)
+	timer.Stop()
+	defer timer.Stop()
 	for {
 		select {
-		case event := <-w.watcher.Events:
+		case event, ok := <-w.watcher.Events:
+			if !ok {
+				return nil
+			}
 			if w.ignore(event.Name) {
 				continue
 			}
-			w.pendingEvents = append(w.pendingEvents, event)
-			w.debounce(func() {
-				err := w.handleEvents(w.pendingEvents, fn)
-				w.pendingEvents = nil
-				if err != nil {
-					w.errorCh <- err
-				}
-			})
-		case err := <-w.errorCh:
-			if err := w.handleError(err); err != nil {
-				return err
+			pending = append(pending, event)
+			timer.Reset(debounceDelay)
+		case <-timer.C:
+			if err := w.handleEvents(pending, fn); err != nil {
+				w.log.Warn("watch error", slog.String("err", err.Error()))
 			}
-		case err := <-w.watcher.Errors:
-			// Watcher was closed
-			if err == nil {
+			pending = nil
+		case err, ok := <-w.watcher.Errors:
+			if !ok {
 				return nil
 			}
-			if err := w.handleError(err); err != nil {
-				return err
-			}
+			w.log.Warn("watch error", slog.String("err", err.Error()))
 		}
 	}
 }
@@ -132,11 +124,6 @@ func (w *FileWatcher) handleEvents(events []Event, fn func(events []Event) error
 			}
 		}
 	}
-	return nil
-}
-
-func (w *FileWatcher) handleError(err error) error {
-	w.log.Warn("watch error", slog.String("err", err.Error()))
 	return nil
 }
 
