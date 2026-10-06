@@ -250,6 +250,8 @@ type Viewer struct {
 	eg          *errgroup.Group
 }
 
+// inject.js polyfills browser APIs that goja lacks for server rendering
+//
 //go:embed inject.js
 var injectJs string
 
@@ -385,12 +387,6 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 			}, nil
 
 		}),
-		esbuild.Virtual(`^inject:inject.js$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
-			return esbuild.OnLoadResult{
-				Contents:   &injectJs,
-				ResolveDir: absDir,
-			}, nil
-		}),
 		esbuild.Virtual(`^runtime:dom_runtime.tsx$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 			return esbuild.OnLoadResult{
 				Loader:     esbuild.LoaderTSX,
@@ -423,7 +419,6 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 		Platform:            esbuild.PlatformBrowser,
 		Define:              v.options.Define,
 		JSX:                 esbuild.JSXAutomatic,
-		Inject:              []string{"inject:inject.js"},
 		Plugins:             plugins,
 	}
 	// Development build

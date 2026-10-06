@@ -896,6 +896,20 @@ func TestBuild(t *testing.T) {
 	is.NoErr(err)
 	is.NoErr(builder.Build("index.jsx", "about.jsx"))
 	is.NoErr(builder.Close())
+	// The goja shims are only for the server
+	ssrCode, err := os.ReadFile(filepath.Join(dir, "dist", "ssr", "index.jsx.js"))
+	is.NoErr(err)
+	contains(t, string(ssrCode), "_otherPort")
+	domFiles, err := filepath.Glob(filepath.Join(dir, "dist", "dom", "*.js"))
+	is.NoErr(err)
+	is.True(len(domFiles) > 0)
+	for _, path := range domFiles {
+		code, err := os.ReadFile(path)
+		is.NoErr(err)
+		if strings.Contains(string(code), "_otherPort") {
+			t.Fatalf("%s contains the goja shims", filepath.Base(path))
+		}
+	}
 
 	// Serve from the built files
 	viewer, err := react.Load(
