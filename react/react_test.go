@@ -948,3 +948,38 @@ func TestBuildCleansOutDir(t *testing.T) {
 	_, err = os.Stat(filepath.Join(dir, "dist", "other.txt"))
 	is.NoErr(err)
 }
+
+func TestBuildMinifyProductionReact(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	// Like cmd/react under go run: not production, but minified
+	viewer, err := react.Load(
+		react.WithDir(dir),
+		react.WithWatch(false),
+		react.WithMinify(true),
+		react.WithLiveRoute(""),
+		react.WithEnv(map[string]string{}),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	is.NoErr(viewer.Build("index.jsx"))
+	// Development builds of React include full warning messages
+	for _, path := range []string{"dist/ssr/index.jsx.js", "dist/dom/index.jsx.js"} {
+		code, err := os.ReadFile(filepath.Join(dir, path))
+		is.NoErr(err)
+		is.True(!strings.Contains(string(code), "Invalid hook call"))
+	}
+}

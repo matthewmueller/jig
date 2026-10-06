@@ -130,7 +130,6 @@ func defaults() *options {
 		FindPages: defaultFinder,
 	}
 	if isProduction() {
-		define["process.env.NODE_ENV"] = `"production"`
 		opts.Cache = true
 		opts.Minify = true
 	} else {
@@ -159,6 +158,13 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 	// Apply the user configuration
 	for _, o := range options {
 		o(opts)
+	}
+
+	// Minified builds are production builds. This takes precedence over the
+	// environment, so React's development build isn't shipped when building
+	// from a shell with NODE_ENV unset or set to development.
+	if opts.Minify {
+		opts.Define["process.env.NODE_ENV"] = `"production"`
 	}
 
 	// Define the environment variables. Defaults to the current environment.
