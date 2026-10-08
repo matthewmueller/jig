@@ -812,6 +812,51 @@ func TestServeFS(t *testing.T) {
 	is.Equal(rec.Code, http.StatusNotFound)
 }
 
+func TestServeFSETag(t *testing.T) {
+	is := is.New(t)
+	fsys := fstest.MapFS{
+		"dist/dom/index.jsx.js": {Data: []byte(`console.log("v1")`)},
+	}
+	load := func() http.Handler {
+		viewer, err := react.Load(
+			react.WithDir(t.TempDir()),
+			react.WithWatch(false),
+			react.WithCache(true),
+			react.WithFS(fsys),
+		)
+		is.NoErr(err)
+		t.Cleanup(func() {
+			is.NoErr(viewer.Close())
+		})
+		return viewer.Middleware(http.NotFoundHandler())
+	}
+	serve := func(handler http.Handler, etag string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	handler := load()
+	rec := serve(handler, "")
+	is.Equal(rec.Code, http.StatusOK)
+	is.Equal(rec.Header().Get("Cache-Control"), "no-cache")
+	etag := rec.Header().Get("ETag")
+	is.True(etag != "")
+	// Unchanged code isn't sent again
+	rec = serve(handler, etag)
+	is.Equal(rec.Code, http.StatusNotModified)
+	is.Equal(rec.Body.Len(), 0)
+	// A deploy with new code is sent again
+	fsys["dist/dom/index.jsx.js"] = &fstest.MapFile{Data: []byte(`console.log("v2")`)}
+	rec = serve(load(), etag)
+	is.Equal(rec.Code, http.StatusOK)
+	is.Equal(rec.Body.String(), `console.log("v2")`)
+	is.True(rec.Header().Get("ETag") != etag)
+}
+
 func TestRenderErrorKeepsErrorView(t *testing.T) {
 	is := is.New(t)
 	dir := t.TempDir()

@@ -652,6 +652,19 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Cached code only changes on deploy, so let browsers revalidate it
+		// instead of downloading it again
+		if v.options.Cache {
+			sum := sha256.Sum256(code)
+			etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+			w.Header().Set("ETag", etag)
+			w.Header().Set("Cache-Control", "no-cache")
+			if r.Header.Get("If-None-Match") == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+
 		// Serve the code
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Write(code)
