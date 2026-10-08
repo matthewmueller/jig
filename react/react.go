@@ -6,7 +6,8 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -733,8 +734,9 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 	}
 
 	// Encode props with Go's JSON rules so struct tags are respected, SSR and
-	// the browser see the same props, and "<" is escaped for the script tag.
-	propsJSON, err := json.Marshal(props)
+	// the browser see the same props, nil slices and maps become [] and {}, and
+	// "<" is escaped for the script tag.
+	propsJSON, err := json.Marshal(props, jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true))
 	if err != nil {
 		return "", fmt.Errorf("react: unable to encode props: %w", err)
 	}
