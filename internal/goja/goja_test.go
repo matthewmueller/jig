@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/matryer/is"
+	"github.com/matthewmueller/jig/internal/goja"
 	"github.com/matthewmueller/logs"
-	"github.com/matthewmueller/views/internal/goja"
 )
 
 func TestNumberExponent(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/matthewmueller/views
+module github.com/matthewmueller/jig
 
 go 1.27.0
 

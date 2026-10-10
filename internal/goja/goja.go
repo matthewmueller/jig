@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/dop251/goja"
-	"github.com/matthewmueller/views/internal/goja/urls"
+	"github.com/matthewmueller/jig/internal/goja/urls"
 )
 
 type (

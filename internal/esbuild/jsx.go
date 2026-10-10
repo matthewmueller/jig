@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
+	"github.com/matthewmueller/jig/internal/head"
+	"github.com/matthewmueller/jig/internal/styledjsx"
 	"github.com/matthewmueller/jsx"
-	"github.com/matthewmueller/views/internal/head"
-	"github.com/matthewmueller/views/internal/styledjsx"
 )
 
 func transpileTSX(path, source string) (string, error) {

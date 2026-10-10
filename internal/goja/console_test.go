@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/matryer/is"
-	"github.com/matthewmueller/views/internal/goja"
+	"github.com/matthewmueller/jig/internal/goja"
 )
 
 func TestConsoleLogObject(t *testing.T) {
@@ -19,9 +19,9 @@ func TestConsoleLogObject(t *testing.T) {
 		pool.Release(vm)
 	})
 
-	_, err := vm.RunString(`console.log({ name: "Views", port: 9000 })`)
+	_, err := vm.RunString(`console.log({ name: "Jig", port: 9000 })`)
 	is.NoErr(err)
-	is.True(strings.Contains(output.String(), `msg="{ name: 'Views', port: 9000 }"`))
+	is.True(strings.Contains(output.String(), `msg="{ name: 'Jig', port: 9000 }"`))
 }
 
 func TestConsoleLogObjectValues(t *testing.T) {

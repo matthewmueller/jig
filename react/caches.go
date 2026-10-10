@@ -3,7 +3,7 @@ package react
 import (
 	"sync"
 
-	"github.com/matthewmueller/views/internal/goja"
+	"github.com/matthewmueller/jig/internal/goja"
 )
 
 type renderCache struct {

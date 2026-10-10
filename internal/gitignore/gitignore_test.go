@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/matryer/is"
-	"github.com/matthewmueller/views/internal/gitignore"
+	"github.com/matthewmueller/jig/internal/gitignore"
 )
 
 func TestFrom(t *testing.T) {

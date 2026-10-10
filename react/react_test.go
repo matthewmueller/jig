@@ -24,8 +24,8 @@ import (
 	"github.com/livebud/npm"
 	"github.com/matryer/is"
 	"github.com/matthewmueller/diff"
+	"github.com/matthewmueller/jig/react"
 	"github.com/matthewmueller/logs"
-	"github.com/matthewmueller/views/react"
 	"github.com/matthewmueller/virt"
 )
 
@@ -166,7 +166,7 @@ func TestRenderEnv(t *testing.T) {
 		react.WithDir(dir),
 		react.WithWatch(false),
 		react.WithEnv(map[string]string{
-			"APP_NAME": "Views",
+			"APP_NAME": "Jig",
 			"PORT":     "9000",
 		}),
 	)
@@ -181,7 +181,7 @@ func TestRenderEnv(t *testing.T) {
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
 	is.NoErr(err)
-	diff.TestString(t, rootHTML, `<div>Views<!-- --> on <!-- -->9000</div>`)
+	diff.TestString(t, rootHTML, `<div>Jig<!-- --> on <!-- -->9000</div>`)
 
 	handler := viewer.Middleware(http.NotFoundHandler())
 	req := httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil)
@@ -192,20 +192,20 @@ func TestRenderEnv(t *testing.T) {
 	body, err := io.ReadAll(res.Body)
 	is.NoErr(err)
 	is.NoErr(res.Body.Close())
-	contains(t, string(body), `"Views"`)
+	contains(t, string(body), `"Jig"`)
 	contains(t, string(body), `"9000"`)
 }
 
 func TestRenderDefaultEnv(t *testing.T) {
 	is := is.New(t)
-	t.Setenv("VIEWS_RENDER_ENV_DEFAULT", "from-os")
+	t.Setenv("JIG_RENDER_ENV_DEFAULT", "from-os")
 	dir := t.TempDir()
 	is.NoErr(virt.Write(virt.Map{
 		"package.json": packageJson,
 		"index.jsx": `
 			import React from 'react';
 			export default function Index() {
-				return <div>{process.env.VIEWS_RENDER_ENV_DEFAULT}</div>;
+				return <div>{process.env.JIG_RENDER_ENV_DEFAULT}</div>;
 			}
 		`,
 	}, dir))
@@ -258,7 +258,7 @@ func TestRenderMissingEnv(t *testing.T) {
 		react.WithDir(dir),
 		react.WithWatch(false),
 		react.WithEnv(map[string]string{
-			"APP_NAME": "Views",
+			"APP_NAME": "Jig",
 		}),
 	)
 	is.NoErr(err)

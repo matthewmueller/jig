@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/dop251/goja"
-	"github.com/matthewmueller/views/internal/goja/jserror"
+	"github.com/matthewmueller/jig/internal/goja/jserror"
 
 	"golang.org/x/net/idna"
 )

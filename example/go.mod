@@ -1,20 +1,18 @@
-module github.com/matthewmueller/views/example
+module github.com/matthewmueller/jig/example
 
-replace github.com/matthewmueller/views => ../
+replace github.com/matthewmueller/jig => ../
 
 replace github.com/matthewmueller/livereload => ../../livereload
 
-go 1.26.0
+go 1.27.0
 
 require (
 	github.com/livebud/mux v0.4.0
+	github.com/matthewmueller/jig v0.0.0-00010101000000-000000000000
 	github.com/matthewmueller/logs v0.0.8
-	github.com/matthewmueller/views v0.0.0-00010101000000-000000000000
 )
 
 require (
-	github.com/bep/debounce v1.2.1 // indirect
-	github.com/buildkite/terminal-to-html/v3 v3.16.8 // indirect
 	github.com/dlclark/regexp2/v2 v2.8.0 // indirect
 	github.com/dop251/goja v0.0.0-20260911104922-fabc3b8078ad // indirect
 	github.com/evanw/esbuild v0.27.2 // indirect
@@ -41,4 +39,4 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 )
 
-tool github.com/matthewmueller/views/cmd/react
+tool github.com/matthewmueller/jig/cmd/react

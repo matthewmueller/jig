@@ -24,14 +24,14 @@ import (
 	"strings"
 
 	"github.com/matthewmueller/cjs"
+	"github.com/matthewmueller/jig/internal/esbuild"
+	"github.com/matthewmueller/jig/internal/gitignore"
+	"github.com/matthewmueller/jig/internal/goja"
+	"github.com/matthewmueller/jig/internal/gotext"
+	"github.com/matthewmueller/jig/internal/livereload"
+	"github.com/matthewmueller/jig/internal/pages"
+	"github.com/matthewmueller/jig/internal/watch"
 	"github.com/matthewmueller/logs"
-	"github.com/matthewmueller/views/internal/esbuild"
-	"github.com/matthewmueller/views/internal/gitignore"
-	"github.com/matthewmueller/views/internal/goja"
-	"github.com/matthewmueller/views/internal/gotext"
-	"github.com/matthewmueller/views/internal/livereload"
-	"github.com/matthewmueller/views/internal/pages"
-	"github.com/matthewmueller/views/internal/watch"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -844,7 +844,7 @@ func packageETag(dir string) (string, error) {
 
 // Modules whose upgrades can change node_modules bundles
 var buildModules = []string{
-	"github.com/matthewmueller/views",
+	"github.com/matthewmueller/jig",
 	"github.com/evanw/esbuild",
 }
 

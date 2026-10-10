@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/matryer/is"
+	"github.com/matthewmueller/jig/internal/watch"
 	"github.com/matthewmueller/logs"
-	"github.com/matthewmueller/views/internal/watch"
 )
 
 func TestWatch(t *testing.T) {

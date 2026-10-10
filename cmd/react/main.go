@@ -10,9 +10,9 @@ import (
 
 	"github.com/livebud/cli"
 	"github.com/matthewmueller/glob"
+	"github.com/matthewmueller/jig/internal/directory"
+	"github.com/matthewmueller/jig/react"
 	"github.com/matthewmueller/logs"
-	"github.com/matthewmueller/views/internal/directory"
-	"github.com/matthewmueller/views/react"
 )
 
 func main() {

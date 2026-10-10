@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/livebud/mux"
+	"github.com/matthewmueller/jig/react"
 	"github.com/matthewmueller/logs"
-	"github.com/matthewmueller/views/react"
 )
 
-//go:generate go run github.com/matthewmueller/views/cmd/react **.tsx
+//go:generate go run github.com/matthewmueller/jig/cmd/react **.tsx
 
 //go:embed dist/**
 var distfs embed.FS
