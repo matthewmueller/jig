@@ -1022,7 +1022,7 @@ func TestBuild(t *testing.T) {
 		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
-	is.NoErr(builder.Build(ctx))
+	is.NoErr(builder.Build(ctx, "."))
 	is.NoErr(builder.Close())
 	// The goja shims are only for the server
 	ssrCode, err := os.ReadFile(filepath.Join(dir, "dist", "ssr", "index.jsx.js"))
@@ -1130,7 +1130,7 @@ func TestBuildWalk(t *testing.T) {
 	t.Cleanup(func() {
 		is.NoErr(viewer.Close())
 	})
-	is.NoErr(viewer.Build(ctx))
+	is.NoErr(viewer.Build(ctx, "."))
 	is.Equal(files(t, filepath.Join(dir, "dist", "ssr")), []string{"index.jsx.js", "users/show.tsx.js"})
 	// .jsx and .tsx pages share chunks
 	domFiles := files(t, filepath.Join(dir, "dist", "dom"))
@@ -1170,9 +1170,40 @@ func TestBuildNoPages(t *testing.T) {
 	t.Cleanup(func() {
 		is.NoErr(viewer.Close())
 	})
-	err = viewer.Build(context.Background())
+	err = viewer.Build(context.Background(), ".")
 	is.True(err != nil)
 	contains(t, err.Error(), "jig: no pages in ")
+}
+
+func TestBuildViewsDir(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"view/index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+		"scripts/page.jsx": `export default () => null`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithMinify(true),
+		jig.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	// Only the views directory is built, but pages are still relative to dir
+	is.NoErr(viewer.Build(ctx, "view"))
+	is.Equal(files(t, filepath.Join(dir, "dist", "ssr")), []string{"view/index.jsx.js"})
+	is.Equal(files(t, filepath.Join(dir, "dist", "dom")), []string{"view/index.jsx.js"})
 }
 
 func TestBuildCleansOutDir(t *testing.T) {
@@ -1202,7 +1233,7 @@ func TestBuildCleansOutDir(t *testing.T) {
 	t.Cleanup(func() {
 		is.NoErr(viewer.Close())
 	})
-	is.NoErr(viewer.Build(ctx))
+	is.NoErr(viewer.Build(ctx, "."))
 	_, err = os.Stat(filepath.Join(dir, "dist", "ssr", "removed.jsx.js"))
 	is.True(errors.Is(err, fs.ErrNotExist))
 	_, err = os.Stat(filepath.Join(dir, "dist", "dom", "chunk-OLD.js"))
@@ -1241,7 +1272,7 @@ func TestBuildMinifyProductionReact(t *testing.T) {
 	t.Cleanup(func() {
 		is.NoErr(viewer.Close())
 	})
-	is.NoErr(viewer.Build(ctx))
+	is.NoErr(viewer.Build(ctx, "."))
 	// Development builds of React include full warning messages
 	for _, path := range []string{"dist/ssr/index.jsx.js", "dist/dom/index.jsx.js"} {
 		code, err := os.ReadFile(filepath.Join(dir, path))

@@ -478,12 +478,14 @@ func getRenderFunction(vm *goja.Runtime, path string) (goja.Callable, error) {
 	return render, nil
 }
 
-// Build the pages in the directory for production, replacing previous builds
-func (v *Viewer) Build(ctx context.Context) error {
+// Build the pages in dir for production, replacing previous builds. dir is
+// relative to the viewer's directory, which pages are still relative to.
+func (v *Viewer) Build(ctx context.Context, dir string) error {
 	// Group the entries by the framework that renders them
 	entries := map[framework.Framework][]string{}
 	ignored := ignorer(v.options.Dir, v.options.OutDir)
-	err := filepath.WalkDir(v.options.Dir, func(path string, de fs.DirEntry, err error) error {
+	dir = filepath.Join(v.options.Dir, dir)
+	err := filepath.WalkDir(dir, func(path string, de fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		} else if ignored(path) {
@@ -531,7 +533,7 @@ func (v *Viewer) Build(ctx context.Context) error {
 		files = slices.Concat(files, ssrFiles, domFiles)
 	}
 	if len(files) == 0 {
-		return fmt.Errorf("jig: no pages in %s", v.options.Dir)
+		return fmt.Errorf("jig: no pages in %s", dir)
 	}
 
 	// Keep the previous build when canceled
