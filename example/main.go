@@ -10,6 +10,7 @@ import (
 
 	"github.com/livebud/mux"
 	"github.com/matthewmueller/jig"
+	"github.com/matthewmueller/jig/example/dashboard"
 	"github.com/matthewmueller/logs"
 )
 
@@ -53,8 +54,8 @@ func run(log *slog.Logger) error {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := viewer.Render(r.Context(), w, "dashboard/dashboard.tsx", map[string]any{
-			"name": "Matt",
+		if err := viewer.Render(r.Context(), w, "dashboard/dashboard.tsx", dashboard.Props{
+			Name: "Matt",
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}

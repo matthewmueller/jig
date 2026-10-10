@@ -12,6 +12,7 @@ type (
 	OnLoadResult = api.OnLoadResult
 	OnLoadArgs   = api.OnLoadArgs
 	EntryPoint   = api.EntryPoint
+	Loader       = api.Loader
 	OutputFile   = api.OutputFile
 	Plugin       = api.Plugin
 	StdinOptions = api.StdinOptions
@@ -24,6 +25,7 @@ var (
 	FormatCommonJS  = api.FormatCommonJS
 	PlatformNeutral = api.PlatformNeutral
 	PlatformBrowser = api.PlatformBrowser
+	LoaderEmpty     = api.LoaderEmpty
 	LoaderJS        = api.LoaderJS
 	LoaderTSX       = api.LoaderTSX
 	ES2015          = api.ES2015

@@ -31,10 +31,12 @@ require (
 	github.com/matthewmueller/styledjsx v0.0.11 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/tdewolff/parse/v2 v2.8.5 // indirect
+	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/tools v0.49.0 // indirect
 )
 
 tool github.com/matthewmueller/jig/cmd/jig

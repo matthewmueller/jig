@@ -7,6 +7,7 @@ import (
 	"github.com/livebud/cli"
 	"github.com/matthewmueller/jig"
 	"github.com/matthewmueller/jig/internal/directory"
+	"github.com/matthewmueller/jig/internal/typegen"
 )
 
 // New CLI that logs to log
@@ -21,7 +22,7 @@ type CLI struct {
 
 // Parse the command line arguments and run the matching command
 func (c *CLI) Parse(ctx context.Context, args ...string) error {
-	cli := cli.New("jig", "Build views for production")
+	cli := cli.New("jig", "Build views for production and generate types for their Go files")
 	in := &Build{}
 	cli.Flag("dir", "The views directory").Short('C').String(&in.Dir).Default(".")
 	cli.Flag("minify", "Minify the code").Short('m').Bool(&in.Minify).Default(true)
@@ -37,7 +38,8 @@ type Build struct {
 	Minify bool
 }
 
-// Build the views in the directory into its dist directory
+// Build the views in the directory into its dist directory, then generate
+// TypeScript types for the Go files in it
 func (c *CLI) Build(ctx context.Context, in *Build) error {
 	dir, err := directory.Resolve(in.Dir)
 	if err != nil {
@@ -54,5 +56,10 @@ func (c *CLI) Build(ctx context.Context, in *Build) error {
 		return err
 	}
 	defer viewer.Close()
-	return viewer.Build(ctx)
+	if err := viewer.Build(ctx); err != nil {
+		return err
+	}
+	// Generated after the build, since the views can be in a package that
+	// embeds the build
+	return typegen.Generate(ctx, c.log, dir)
 }

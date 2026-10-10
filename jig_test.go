@@ -327,6 +327,52 @@ func TestRenderImportTSX(t *testing.T) {
 	contains(t, rec.Body.String(), `Form`)
 }
 
+func TestRenderImportGoTypes(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		// Keeps the side-effect import of type-only imports
+		"tsconfig.json": `{ "compilerOptions": { "verbatimModuleSyntax": true } }`,
+		"props.go": `
+			package views
+			type Props struct {
+				Name string ` + "`json:\"name\"`" + `
+			}
+		`,
+		"props.go.ts": `export type Props = { name: string }`,
+		"greet.ts": `
+			import { type Props } from "./props.go"
+			export const greet = (props: Props) => "Hello, " + props.name
+		`,
+		"index.jsx": `
+			import React from 'react';
+			import { greet } from './greet.ts';
+			export default function Index(props) {
+				return <div>{greet(props)}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "Jig"}))
+	contains(t, actual.String(), `<div id="root"><div>Hello, Jig</div></div>`)
+	handler := viewer.Middleware(http.NotFoundHandler())
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil))
+	is.Equal(rec.Code, http.StatusOK)
+	contains(t, rec.Body.String(), `"Hello, "`)
+}
+
 func TestRenderImportGenericFormTSX(t *testing.T) {
 	is := is.New(t)
 	dir := t.TempDir()

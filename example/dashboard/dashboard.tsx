@@ -1,8 +1,5 @@
 import React from "react";
-
-export type Props = {
-  name: string;
-};
+import type { Props } from "./props.go";
 
 export default function Dashboard(props: Props) {
   const [count, setCount] = React.useState(0);

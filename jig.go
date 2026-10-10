@@ -250,6 +250,13 @@ type Viewer struct {
 	eg          *errgroup.Group
 }
 
+// Views import the types generated for Go files from the Go files themselves,
+// like "./props.go". Type-only imports can still leave a side-effect import
+// behind, so load Go files as empty modules.
+var loaders = map[string]esbuild.Loader{
+	".go": esbuild.LoaderEmpty,
+}
+
 // inject.js polyfills browser APIs that goja lacks for server rendering
 //
 //go:embed inject.js
@@ -301,6 +308,7 @@ func (v *Viewer) transformPageSSR(fw framework.Framework, page *pages.Page) ([]e
 		GlobalName:        fmt.Sprintf("__jig__[%q]", page.Entry),
 		Define:            v.options.Define,
 		JSX:               esbuild.JSXAutomatic,
+		Loader:            loaders,
 		Inject:            []string{"inject:inject.js"},
 		Plugins:           plugins,
 	})
@@ -341,6 +349,7 @@ func (v *Viewer) transformDOM(fw framework.Framework, split bool, entries ...str
 		Platform:            esbuild.PlatformBrowser,
 		Define:              v.options.Define,
 		JSX:                 esbuild.JSXAutomatic,
+		Loader:              loaders,
 		Plugins:             fw.Client(),
 	}
 	// Development build. Added after the framework's plugins, since its
