@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/livebud/mux"
-	"github.com/matthewmueller/jig/react"
+	"github.com/matthewmueller/jig"
 	"github.com/matthewmueller/logs"
 )
 
-//go:generate go run github.com/matthewmueller/jig/cmd/react **.tsx
+//go:generate go tool jig
 
-//go:embed dist/**
+//go:embed all:dist
 var distfs embed.FS
 
 func main() {
@@ -27,9 +27,9 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
-	viewer, err := react.Load(
-		react.WithFS(distfs),
-		react.WithLog(log),
+	viewer, err := jig.Load(
+		jig.WithFS(distfs),
+		jig.WithLog(log),
 	)
 	if err != nil {
 		return err

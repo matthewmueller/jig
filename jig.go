@@ -1,4 +1,4 @@
-package react
+package jig
 
 import (
 	"bytes"
@@ -18,6 +18,7 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -25,9 +26,10 @@ import (
 
 	"github.com/matthewmueller/cjs"
 	"github.com/matthewmueller/jig/internal/esbuild"
+	"github.com/matthewmueller/jig/internal/framework"
+	"github.com/matthewmueller/jig/internal/framework/react"
 	"github.com/matthewmueller/jig/internal/gitignore"
 	"github.com/matthewmueller/jig/internal/goja"
-	"github.com/matthewmueller/jig/internal/gotext"
 	"github.com/matthewmueller/jig/internal/livereload"
 	"github.com/matthewmueller/jig/internal/pages"
 	"github.com/matthewmueller/jig/internal/watch"
@@ -44,10 +46,9 @@ type options struct {
 	Env       map[string]string
 	Define    map[string]string
 	// envSet    bool
-	Cache     bool
-	Log       *slog.Logger
-	Minify    bool
-	FindPages func(dir string, entries ...string) (Pages, error)
+	Cache  bool
+	Log    *slog.Logger
+	Minify bool
 }
 
 type Option func(*options)
@@ -109,28 +110,17 @@ func WithMinify(minify bool) Option {
 	}
 }
 
-func WithFindPages(fn func(dir string, entries ...string) (Pages, error)) Option {
-	return func(o *options) {
-		o.FindPages = fn
-	}
-}
-
-func defaultFinder(dir string, entries ...string) (Pages, error) {
-	return pages.Find(dir, entries...)
-}
-
 func defaults() *options {
 	define := map[string]string{
 		"process":     "{}",
 		"process.env": "{}",
 	}
 	opts := &options{
-		Dir:       ".",
-		OutDir:    "dist",
-		FS:        nil,
-		Define:    define,
-		Log:       logs.Default(),
-		FindPages: defaultFinder,
+		Dir:    ".",
+		OutDir: "dist",
+		FS:     nil,
+		Define: define,
+		Log:    logs.Default(),
 	}
 	if isProduction() {
 		opts.Cache = true
@@ -190,7 +180,7 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 	liveReload := livereload.Noop()
 	if opts.LiveRoute != "" {
 		if !strings.HasPrefix(opts.LiveRoute, "/") {
-			return nil, fmt.Errorf("react: live route must start with '/'")
+			return nil, fmt.Errorf("jig: live route must start with '/'")
 		}
 		liveReload = livereload.New(opts.Log, opts.LiveRoute)
 	}
@@ -200,18 +190,22 @@ func Load(options ...Option) (viewer *Viewer, err error) {
 	// Start the watcher
 	watcher := watch.Noop()
 	if opts.Watch {
-		outDir := filepath.Join(opts.Dir, opts.OutDir)
-		gitignored := gitignore.From(opts.Dir)
-		watcher, err = watch.New(opts.Log, opts.Dir, func(path string) bool {
-			return path == outDir || strings.HasPrefix(path, outDir+string(filepath.Separator)) || gitignored(path)
-		})
+		watcher, err = watch.New(opts.Log, opts.Dir, ignorer(opts.Dir, opts.OutDir))
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	// Frameworks by the extensions of the views they render
+	r := react.New(opts.Dir)
+	frameworks := map[string]framework.Framework{
+		".jsx": r,
+		".tsx": r,
+	}
+
 	viewer = &Viewer{
 		opts,
+		frameworks,
 		goja.New(opts.Log),
 		&renderCache{},
 		&serveCache{},
@@ -236,16 +230,18 @@ func (v *Viewer) Close() (err error) {
 	return err
 }
 
-type Page = pages.Page
-
-type Pages interface {
-	Get(entry string) (*Page, bool)
-	List() []*Page
-	Entries() []string
+// ignorer ignores the out directory and gitignored paths within dir
+func ignorer(dir, outDir string) func(path string) bool {
+	outDir = filepath.Join(dir, outDir)
+	gitignored := gitignore.From(dir)
+	return func(path string) bool {
+		return path == outDir || strings.HasPrefix(path, outDir+string(filepath.Separator)) || gitignored(path)
+	}
 }
 
 type Viewer struct {
 	options     *options
+	frameworks  map[string]framework.Framework
 	pool        *goja.Pool
 	renderCache *renderCache
 	serveCache  *serveCache
@@ -259,61 +255,13 @@ type Viewer struct {
 //go:embed inject.js
 var injectJs string
 
-//go:embed ssr_entry.tsx.gotext
-var ssrEntryCode string
-
-var ssrEntryTemplate = gotext.MustCompile("ssr_entry.tsx.gotext", ssrEntryCode)
-
-//go:embed ssr_runtime.tsx
-var ssrRuntimeCode string
-
-type ssrEntryData struct {
-	Page *Page
-}
-
 // transformSSR builds pages for the server. Outputs are kept in memory.
-func (v *Viewer) transformSSR(absDir string, pages Pages) ([]esbuild.OutputFile, error) {
-	plugins := []esbuild.Plugin{
-		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
-			entryPath := strings.TrimPrefix(args.Path, "entry:")
-			page, ok := pages.Get(entryPath)
-			if !ok {
-				return esbuild.OnLoadResult{}, fmt.Errorf("react: no page found for entry %q", entryPath)
-			}
-			contents, err := ssrEntryTemplate.Render(ssrEntryData{
-				Page: page,
-			})
-			if err != nil {
-				return esbuild.OnLoadResult{}, fmt.Errorf("react: failed to render ssr entry template: %w", err)
-			}
-			return esbuild.OnLoadResult{
-				Loader:     esbuild.LoaderTSX,
-				Contents:   &contents,
-				ResolveDir: absDir,
-			}, nil
-
-		}),
-		esbuild.Virtual(`^inject:inject.js$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
-			return esbuild.OnLoadResult{
-				Contents:   &injectJs,
-				ResolveDir: absDir,
-			}, nil
-		}),
-		esbuild.Virtual(`^runtime:ssr_runtime.tsx$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
-			return esbuild.OnLoadResult{
-				Loader:     esbuild.LoaderTSX,
-				Contents:   &ssrRuntimeCode,
-				ResolveDir: absDir,
-			}, nil
-		}),
-		esbuild.JSX("runtime:ssr_runtime.tsx"),
-	}
-	list := pages.List()
-	outputs := make([][]esbuild.OutputFile, len(list))
+func (v *Viewer) transformSSR(fw framework.Framework, pages []*pages.Page) ([]esbuild.OutputFile, error) {
+	outputs := make([][]esbuild.OutputFile, len(pages))
 	eg := new(errgroup.Group)
-	for i, page := range list {
+	for i, page := range pages {
 		eg.Go(func() (err error) {
-			outputs[i], err = v.transformPageSSR(plugins, absDir, page.Entry)
+			outputs[i], err = v.transformPageSSR(fw, page)
 			return err
 		})
 	}
@@ -323,16 +271,24 @@ func (v *Viewer) transformSSR(absDir string, pages Pages) ([]esbuild.OutputFile,
 	return slices.Concat(outputs...), nil
 }
 
-func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry string) ([]esbuild.OutputFile, error) {
+func (v *Viewer) transformPageSSR(fw framework.Framework, page *pages.Page) ([]esbuild.OutputFile, error) {
+	plugins := append(fw.Server(page),
+		esbuild.Virtual(`^inject:inject.js$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
+			return esbuild.OnLoadResult{
+				Contents:   &injectJs,
+				ResolveDir: v.options.Dir,
+			}, nil
+		}),
+	)
 	// Build the file
 	result, err := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: []esbuild.EntryPoint{
 			{
-				InputPath:  "entry:" + entry,
-				OutputPath: entry,
+				InputPath:  "entry:" + page.Entry,
+				OutputPath: page.Entry,
 			},
 		},
-		AbsWorkingDir:     absDir,
+		AbsWorkingDir:     v.options.Dir,
 		Bundle:            true,
 		Splitting:         false,
 		Outdir:            filepath.Join(v.options.OutDir, "ssr"),
@@ -342,16 +298,16 @@ func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry
 		MinifyIdentifiers: v.options.Minify,
 		MinifySyntax:      v.options.Minify,
 		Platform:          esbuild.PlatformBrowser,
-		GlobalName:        fmt.Sprintf("__go_react__[%q]", entry),
+		GlobalName:        fmt.Sprintf("__jig__[%q]", page.Entry),
 		Define:            v.options.Define,
 		JSX:               esbuild.JSXAutomatic,
 		Inject:            []string{"inject:inject.js"},
 		Plugins:           plugins,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to bundle ssr: %w", err)
+		return nil, fmt.Errorf("jig: failed to bundle ssr: %w", err)
 	} else if len(result.OutputFiles) == 0 {
-		return nil, fmt.Errorf("react: no output files after ssr bundle")
+		return nil, fmt.Errorf("jig: no output files after ssr bundle")
 	}
 	for _, warning := range result.Warnings {
 		v.options.Log.Warn("esbuild warning", slog.String("message", warning.Text))
@@ -359,48 +315,10 @@ func (v *Viewer) transformPageSSR(plugins []esbuild.Plugin, absDir string, entry
 	return result.OutputFiles, nil
 }
 
-//go:embed dom_entry.jsx.gotext
-var domEntryCode string
-
-var domEntryTemplate = gotext.MustCompile("dom_entry.jsx.gotext", domEntryCode)
-
-//go:embed dom_runtime.tsx
-var domRuntimeCode string
-
-type domEntryData struct {
-	Entry string
-}
-
 // transformDOM builds entries for the browser. Outputs are kept in memory. Code
 // is only split into shared chunks when split is set, since chunks can only be
 // served from a full build.
-func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]esbuild.OutputFile, error) {
-	plugins := []esbuild.Plugin{
-		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
-			path := strings.TrimPrefix(args.Path, "entry:")
-			contents, err := domEntryTemplate.Render(domEntryData{
-				Entry: path,
-			})
-			if err != nil {
-				return esbuild.OnLoadResult{}, fmt.Errorf("react: failed to render dom entry template: %w", err)
-			}
-			return esbuild.OnLoadResult{
-				Loader:     esbuild.LoaderTSX,
-				Contents:   &contents,
-				ResolveDir: absDir,
-			}, nil
-
-		}),
-		esbuild.Virtual(`^runtime:dom_runtime.tsx$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
-			return esbuild.OnLoadResult{
-				Loader:     esbuild.LoaderTSX,
-				Contents:   &domRuntimeCode,
-				ResolveDir: absDir,
-			}, nil
-		}),
-		esbuild.JSX("runtime:dom_runtime.tsx"),
-	}
-
+func (v *Viewer) transformDOM(fw framework.Framework, split bool, entries ...string) ([]esbuild.OutputFile, error) {
 	// Prepare the entrypoints
 	var entrypoints []esbuild.EntryPoint
 	for _, entry := range entries {
@@ -411,7 +329,7 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 	}
 	buildOptions := esbuild.BuildOptions{
 		EntryPointsAdvanced: entrypoints,
-		AbsWorkingDir:       absDir,
+		AbsWorkingDir:       v.options.Dir,
 		Bundle:              true,
 		Splitting:           split && v.options.Minify,
 		Outdir:              filepath.Join(v.options.OutDir, "dom"),
@@ -423,9 +341,10 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 		Platform:            esbuild.PlatformBrowser,
 		Define:              v.options.Define,
 		JSX:                 esbuild.JSXAutomatic,
-		Plugins:             plugins,
+		Plugins:             fw.Client(),
 	}
-	// Development build
+	// Development build. Added after the framework's plugins, since its
+	// runtime modules also look like bare imports.
 	if !v.options.Minify {
 		buildOptions.Plugins = append(
 			buildOptions.Plugins,
@@ -435,9 +354,9 @@ func (v *Viewer) transformDOM(absDir string, split bool, entries ...string) ([]e
 	// Build the file
 	result, err := esbuild.Build(buildOptions)
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to bundle dom: %w", err)
+		return nil, fmt.Errorf("jig: failed to bundle dom: %w", err)
 	} else if len(result.OutputFiles) == 0 {
-		return nil, fmt.Errorf("react: no output files after dom bundle")
+		return nil, fmt.Errorf("jig: no output files after dom bundle")
 	}
 	for _, warning := range result.Warnings {
 		v.options.Log.Warn("esbuild warning", slog.String("message", warning.Text))
@@ -465,9 +384,9 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to bundle module %q: %w", module, err)
+		return nil, fmt.Errorf("jig: failed to bundle module %q: %w", module, err)
 	} else if len(result.OutputFiles) != 1 {
-		return nil, fmt.Errorf("react: expected exactly one output file after bundling module %q", module)
+		return nil, fmt.Errorf("jig: expected exactly one output file after bundling module %q", module)
 	}
 	for _, warning := range result.Warnings {
 		v.options.Log.Warn("esbuild warning", slog.String("module", module), slog.String("message", warning.Text))
@@ -476,7 +395,7 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 	contents := result.OutputFiles[0].Contents
 	exports, err := cjs.ParseExports(module, string(contents))
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to parse exports of %q: %w", module, err)
+		return nil, fmt.Errorf("jig: failed to parse exports of %q: %w", module, err)
 	}
 
 	// No exports, return as-is since it's likely an ESM module already
@@ -516,9 +435,9 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to rebundle module %q: %w", module, err)
+		return nil, fmt.Errorf("jig: failed to rebundle module %q: %w", module, err)
 	} else if len(result.OutputFiles) != 1 {
-		return nil, fmt.Errorf("react: expected exactly one output file after rebundling %q", module)
+		return nil, fmt.Errorf("jig: expected exactly one output file after rebundling %q", module)
 	}
 	for _, warning := range result.Warnings {
 		v.options.Log.Warn("esbuild warning", slog.String("module", module), slog.String("message", warning.Text))
@@ -526,60 +445,104 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 
 	rewritten, err := cjs.RewriteRequires(module, prefix, string(result.OutputFiles[0].Contents))
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to rewrite requires: %w", err)
+		return nil, fmt.Errorf("jig: failed to rewrite requires: %w", err)
 	}
 
 	return []byte(rewritten), nil
 }
 
 func getRenderFunction(vm *goja.Runtime, path string) (goja.Callable, error) {
-	reactObj := vm.Get("__go_react__")
-	if reactObj == nil {
-		return nil, fmt.Errorf("react: unable to load __go_react__ object")
+	jigObj := vm.Get("__jig__")
+	if jigObj == nil {
+		return nil, fmt.Errorf("jig: unable to load __jig__ object")
 	}
-	pathObj := reactObj.ToObject(vm).Get(path)
+	pathObj := jigObj.ToObject(vm).Get(path)
 	if pathObj == nil {
-		return nil, fmt.Errorf("react: unable to load __go_react__[%q]", path)
+		return nil, fmt.Errorf("jig: unable to load __jig__[%q]", path)
 	}
 	obj := pathObj.ToObject(vm)
 	// Get the render function
 	render, ok := goja.AssertFunction(obj.Get("render"))
 	if !ok {
-		return nil, fmt.Errorf("react: unable to load __go_react__[%q].render function", path)
+		return nil, fmt.Errorf("jig: unable to load __jig__[%q].render function", path)
 	}
 	return render, nil
 }
 
-func (v *Viewer) Build(paths ...string) error {
-	absDir, err := filepath.Abs(v.options.Dir)
+// Build the pages in the directory for production, replacing previous builds
+func (v *Viewer) Build(ctx context.Context) error {
+	// Group the entries by the framework that renders them
+	entries := map[framework.Framework][]string{}
+	ignored := ignorer(v.options.Dir, v.options.OutDir)
+	err := filepath.WalkDir(v.options.Dir, func(path string, de fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		} else if ignored(path) {
+			if de.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		fw, ok := v.frameworks[filepath.Ext(path)]
+		if !ok || de.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(v.options.Dir, path)
+		if err != nil {
+			return err
+		}
+		entries[fw] = append(entries[fw], filepath.ToSlash(rel))
+		return nil
+	})
 	if err != nil {
+		return fmt.Errorf("jig: failed to find pages: %w", err)
+	}
+
+	// Build each framework's pages. Pages of the same framework share chunks.
+	var files []esbuild.OutputFile
+	for fw, entries := range entries {
+		found, err := pages.Find(v.options.Dir, entries...)
+		if err != nil {
+			return fmt.Errorf("jig: failed to find pages: %w", err)
+		} else if len(found) == 0 {
+			continue
+		}
+		ssrFiles, err := v.transformSSR(fw, found)
+		if err != nil {
+			return fmt.Errorf("jig: failed to build: %w", err)
+		}
+		pageEntries := make([]string, len(found))
+		for i, page := range found {
+			pageEntries[i] = page.Entry
+		}
+		domFiles, err := v.transformDOM(fw, true, pageEntries...)
+		if err != nil {
+			return fmt.Errorf("jig: failed to build: %w", err)
+		}
+		files = slices.Concat(files, ssrFiles, domFiles)
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("jig: no pages in %s", v.options.Dir)
+	}
+
+	// Keep the previous build when canceled
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	pages, err := v.options.FindPages(absDir, paths...)
-	if err != nil {
-		return err
-	}
-	ssrFiles, err := v.transformSSR(absDir, pages)
-	if err != nil {
-		return fmt.Errorf("react: failed to build: %w", err)
-	}
-	domFiles, err := v.transformDOM(absDir, true, pages.Entries()...)
-	if err != nil {
-		return fmt.Errorf("react: failed to build: %w", err)
-	}
+
 	// Replace previous builds so removed pages and stale chunks aren't left
 	// behind. Only done once the build succeeds.
 	for _, dir := range []string{"ssr", "dom"} {
-		if err := os.RemoveAll(filepath.Join(absDir, v.options.OutDir, dir)); err != nil {
-			return fmt.Errorf("react: failed to build: %w", err)
+		if err := os.RemoveAll(filepath.Join(v.options.Dir, v.options.OutDir, dir)); err != nil {
+			return fmt.Errorf("jig: failed to build: %w", err)
 		}
 	}
-	for _, file := range slices.Concat(ssrFiles, domFiles) {
+	for _, file := range files {
 		if err := os.MkdirAll(filepath.Dir(file.Path), 0755); err != nil {
-			return fmt.Errorf("react: failed to build: %w", err)
+			return fmt.Errorf("jig: failed to build: %w", err)
 		}
 		if err := os.WriteFile(file.Path, file.Contents, 0644); err != nil {
-			return fmt.Errorf("react: failed to build: %w", err)
+			return fmt.Errorf("jig: failed to build: %w", err)
 		}
 	}
 	return nil
@@ -594,7 +557,7 @@ func outputFile(files []esbuild.OutputFile, path string) ([]byte, error) {
 			return file.Contents, nil
 		}
 	}
-	return nil, fmt.Errorf("react: no output file for %q", path)
+	return nil, fmt.Errorf("jig: no output file for %q", path)
 }
 
 func (v *Viewer) Middleware(next http.Handler) http.Handler {
@@ -648,7 +611,7 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			consoleError(w, "react: failed to serve %s: %s", r.URL.Path, err.Error())
+			consoleError(w, "jig: failed to serve %s: %s", r.URL.Path, err.Error())
 			return
 		}
 
@@ -683,15 +646,14 @@ func (v *Viewer) serveDOM(path string) ([]byte, error) {
 	if code, ok := v.serveCache.Get(path); ok {
 		return code, nil
 	}
-	switch gopath.Ext(path) {
-	case ".jsx", ".tsx":
-	default:
+	fw, ok := v.frameworks[gopath.Ext(path)]
+	if !ok {
 		return nil, fs.ErrNotExist
 	}
 	if _, err := os.Stat(filepath.Join(v.options.Dir, path)); err != nil {
 		return nil, err
 	}
-	files, err := v.transformDOM(v.options.Dir, false, path)
+	files, err := v.transformDOM(fw, false, path)
 	if err != nil {
 		return nil, err
 	}
@@ -721,7 +683,7 @@ func (v *Viewer) Render(ctx context.Context, w io.Writer, path string, props any
 		v.pool.Release(vm)
 	}
 	if err != nil {
-		return fmt.Errorf("react: unable to render page %q: %w", path, err)
+		return fmt.Errorf("jig: unable to render page %q: %w", path, err)
 	}
 
 	_, err = io.WriteString(w, html)
@@ -738,11 +700,11 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 			return "", err
 		}
 		if _, err = vm.RunProgram(program); err != nil {
-			return "", fmt.Errorf("react: failed to evaluate code for %s: %w", path, err)
+			return "", fmt.Errorf("jig: failed to evaluate code for %s: %w", path, err)
 		}
 		render, err = getRenderFunction(vm, path)
 		if err != nil {
-			return "", fmt.Errorf("react: failed to get render function for %s: %w", path, err)
+			return "", fmt.Errorf("jig: failed to get render function for %s: %w", path, err)
 		}
 	}
 
@@ -751,13 +713,13 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 	// "<" is escaped for the script tag.
 	propsJSON, err := json.Marshal(props, jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true))
 	if err != nil {
-		return "", fmt.Errorf("react: unable to encode props: %w", err)
+		return "", fmt.Errorf("jig: unable to encode props: %w", err)
 	}
 
 	// Call the render function
 	result, err := render(goja.Undefined(), vm.ToValue(string(propsJSON)))
 	if err != nil {
-		return "", fmt.Errorf("react: unable to render the component: %w", err)
+		return "", fmt.Errorf("jig: unable to render the component: %w", err)
 	}
 
 	html := result.String()
@@ -771,17 +733,21 @@ func (v *Viewer) readSSR(path string) ([]byte, error) {
 	if v.options.Cache && v.options.FS != nil {
 		code, err := fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "ssr", path+".js"))
 		if err != nil {
-			return nil, fmt.Errorf("react: failed to read ssr file: %w", err)
+			return nil, fmt.Errorf("jig: failed to read ssr file: %w", err)
 		}
 		return code, nil
 	}
-	pages, err := v.options.FindPages(v.options.Dir, path)
-	if err != nil {
-		return nil, fmt.Errorf("react: failed to find pages: %w", err)
+	fw, ok := v.frameworks[gopath.Ext(path)]
+	if !ok {
+		return nil, fmt.Errorf("jig: no framework renders %q files", gopath.Ext(path))
 	}
-	files, err := v.transformSSR(v.options.Dir, pages)
+	pages, err := pages.Find(v.options.Dir, path)
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to transform for ssr: %w", err)
+		return nil, fmt.Errorf("jig: failed to find pages: %w", err)
+	}
+	files, err := v.transformSSR(fw, pages)
+	if err != nil {
+		return nil, fmt.Errorf("jig: failed to transform for ssr: %w", err)
 	}
 	return outputFile(files, gopath.Join(v.options.OutDir, "ssr", path+".js"))
 }
@@ -799,7 +765,7 @@ func (v *Viewer) compile(path string) (*goja.Program, error) {
 
 	program, err := goja.Compile(path, string(code), false)
 	if err != nil {
-		return nil, fmt.Errorf("react: failed to compile code for %s: %w", path, err)
+		return nil, fmt.Errorf("jig: failed to compile code for %s: %w", path, err)
 	}
 
 	if v.options.Cache {
@@ -842,9 +808,10 @@ func packageETag(dir string) (string, error) {
 	return `"` + hex.EncodeToString(hash.Sum(nil)[:8]) + `"`, nil
 }
 
-// Modules whose upgrades can change node_modules bundles
+// Modules whose upgrades can change node_modules bundles. The root package's
+// path is jig's module path.
 var buildModules = []string{
-	"github.com/matthewmueller/jig",
+	reflect.TypeFor[Viewer]().PkgPath(),
 	"github.com/evanw/esbuild",
 }
 

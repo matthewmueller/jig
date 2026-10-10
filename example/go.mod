@@ -19,7 +19,6 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
-	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/google/pprof v0.0.0-20260906184651-6331bc6350fe // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/livebud/cli v0.0.22 // indirect
@@ -28,7 +27,6 @@ require (
 	github.com/matthewmueller/cjs v0.0.2 // indirect
 	github.com/matthewmueller/css v0.0.4 // indirect
 	github.com/matthewmueller/enroute v0.1.0 // indirect
-	github.com/matthewmueller/glob v0.1.1 // indirect
 	github.com/matthewmueller/jsx v0.0.12 // indirect
 	github.com/matthewmueller/styledjsx v0.0.11 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
@@ -39,4 +37,4 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 )
 
-tool github.com/matthewmueller/jig/cmd/react
+tool github.com/matthewmueller/jig/cmd/jig

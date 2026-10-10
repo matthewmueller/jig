@@ -4,48 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
-
-type Index struct {
-	mu    sync.RWMutex
-	pages map[string]*Page
-}
-
-func (i *Index) Get(entry string) (*Page, bool) {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	if page, ok := i.pages[entry]; ok {
-		return page, true
-	}
-	return nil, false
-}
-
-func (i *Index) Add(entry string, page *Page) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	i.pages[entry] = page
-}
-
-func (i *Index) List() []*Page {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	var pages []*Page
-	for _, page := range i.pages {
-		pages = append(pages, page)
-	}
-	return pages
-}
-
-func (i *Index) Entries() []string {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	var entries []string
-	for _, page := range i.pages {
-		entries = append(entries, page.Entry)
-	}
-	return entries
-}
 
 type Page struct {
 	Entry  string
@@ -53,10 +12,9 @@ type Page struct {
 	Error  string
 }
 
-func Find(dir string, entries ...string) (index *Index, err error) {
-	index = &Index{
-		pages: make(map[string]*Page),
-	}
+// Find the pages for entries in dir, in order. Layout and error entries aren't
+// pages, so they're skipped.
+func Find(dir string, entries ...string) (pages []*Page, err error) {
 	// TODO: async
 	for _, entry := range entries {
 		switch extless(filepath.Base(entry)) {
@@ -67,9 +25,9 @@ func Find(dir string, entries ...string) (index *Index, err error) {
 		if err != nil {
 			return nil, err
 		}
-		index.Add(entry, page)
+		pages = append(pages, page)
 	}
-	return index, nil
+	return pages, nil
 }
 
 func extless(base string) string {

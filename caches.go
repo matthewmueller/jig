@@ -1,4 +1,4 @@
-package react
+package jig
 
 import (
 	"sync"

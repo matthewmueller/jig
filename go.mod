@@ -13,7 +13,6 @@ require (
 	github.com/matryer/is v1.4.1
 	github.com/matthewmueller/cjs v0.0.2
 	github.com/matthewmueller/diff v0.0.3
-	github.com/matthewmueller/glob v0.1.1
 	github.com/matthewmueller/jsx v0.0.12
 	github.com/matthewmueller/logs v0.0.8
 	github.com/matthewmueller/styledjsx v0.0.11
@@ -37,6 +36,7 @@ require (
 	github.com/lithammer/dedent v1.1.0 // indirect
 	github.com/livebud/color v0.0.2 // indirect
 	github.com/matthewmueller/css v0.0.4 // indirect
+	github.com/matthewmueller/glob v0.1.1 // indirect
 	github.com/sergi/go-diff v1.3.1 // indirect
 	github.com/tdewolff/parse/v2 v2.8.5 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect

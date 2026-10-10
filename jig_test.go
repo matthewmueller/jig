@@ -1,4 +1,4 @@
-package react_test
+package jig_test
 
 import (
 	"bufio"
@@ -24,7 +24,7 @@ import (
 	"github.com/livebud/npm"
 	"github.com/matryer/is"
 	"github.com/matthewmueller/diff"
-	"github.com/matthewmueller/jig/react"
+	"github.com/matthewmueller/jig"
 	"github.com/matthewmueller/logs"
 	"github.com/matthewmueller/virt"
 )
@@ -55,10 +55,10 @@ func TestRenderBasic(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithLog(logs.Default()),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithLog(logs.Default()),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -90,9 +90,9 @@ func TestRenderMultiple(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -162,10 +162,10 @@ func TestRenderEnv(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithEnv(map[string]string{
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithEnv(map[string]string{
 			"APP_NAME": "Jig",
 			"PORT":     "9000",
 		}),
@@ -211,9 +211,9 @@ func TestRenderDefaultEnv(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -254,10 +254,10 @@ func TestRenderMissingEnv(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithEnv(map[string]string{
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithEnv(map[string]string{
 			"APP_NAME": "Jig",
 		}),
 	)
@@ -302,9 +302,9 @@ func TestRenderImportTSX(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -391,9 +391,9 @@ func TestRenderImportGenericFormTSX(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -436,15 +436,15 @@ func TestRenderProduction(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithMinify(true),
-		react.WithCache(true),
-		react.WithEnv(map[string]string{
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithMinify(true),
+		jig.WithCache(true),
+		jig.WithEnv(map[string]string{
 			"NODE_ENV": "production",
 		}),
-		react.WithLiveRoute(""),
+		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -490,9 +490,9 @@ func TestServeClient(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -527,11 +527,11 @@ func TestRenderConcurrent(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithCache(true),
-		react.WithLiveRoute(""),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(true),
+		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -567,9 +567,9 @@ func TestRenderPropsEscaped(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -601,9 +601,9 @@ func TestRenderPropsJSON(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -638,9 +638,9 @@ func TestRenderPropsNilSlice(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -677,9 +677,9 @@ func TestServeNodeModulesTraversal(t *testing.T) {
 	}, root))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -718,10 +718,10 @@ func TestServeNodeModulesProduction(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithMinify(true),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithMinify(true),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -751,10 +751,10 @@ func TestServeStaticJSPassthrough(t *testing.T) {
 	}, root))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithCache(true),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(true),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -787,11 +787,11 @@ func TestServeStaticJSPassthrough(t *testing.T) {
 
 func TestServeFS(t *testing.T) {
 	is := is.New(t)
-	viewer, err := react.Load(
-		react.WithDir(t.TempDir()),
-		react.WithWatch(false),
-		react.WithCache(true),
-		react.WithFS(fstest.MapFS{
+	viewer, err := jig.Load(
+		jig.WithDir(t.TempDir()),
+		jig.WithWatch(false),
+		jig.WithCache(true),
+		jig.WithFS(fstest.MapFS{
 			"dist/dom/index.jsx.js": {Data: []byte(`import "./chunk-ABC.js"`)},
 			"dist/dom/chunk-ABC.js": {Data: []byte(`console.log("chunk")`)},
 		}),
@@ -818,11 +818,11 @@ func TestServeFSETag(t *testing.T) {
 		"dist/dom/index.jsx.js": {Data: []byte(`console.log("v1")`)},
 	}
 	load := func() http.Handler {
-		viewer, err := react.Load(
-			react.WithDir(t.TempDir()),
-			react.WithWatch(false),
-			react.WithCache(true),
-			react.WithFS(fsys),
+		viewer, err := jig.Load(
+			jig.WithDir(t.TempDir()),
+			jig.WithWatch(false),
+			jig.WithCache(true),
+			jig.WithFS(fsys),
 		)
 		is.NoErr(err)
 		t.Cleanup(func() {
@@ -880,11 +880,11 @@ func TestRenderErrorKeepsErrorView(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithCache(true),
-		react.WithLiveRoute(""),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(true),
+		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -914,11 +914,11 @@ func TestRenderConcurrentDev(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithCache(false),
-		react.WithLiveRoute(""),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(false),
+		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -969,14 +969,14 @@ func TestBuild(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	builder, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithMinify(true),
-		react.WithLiveRoute(""),
+	builder, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithMinify(true),
+		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
-	is.NoErr(builder.Build("index.jsx", "about.jsx"))
+	is.NoErr(builder.Build(ctx))
 	is.NoErr(builder.Close())
 	// The goja shims are only for the server
 	ssrCode, err := os.ReadFile(filepath.Join(dir, "dist", "ssr", "index.jsx.js"))
@@ -994,13 +994,13 @@ func TestBuild(t *testing.T) {
 	}
 
 	// Serve from the built files
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithCache(true),
-		react.WithMinify(true),
-		react.WithLiveRoute(""),
-		react.WithFS(os.DirFS(dir)),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(true),
+		jig.WithMinify(true),
+		jig.WithLiveRoute(""),
+		jig.WithFS(os.DirFS(dir)),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -1014,6 +1014,119 @@ func TestBuild(t *testing.T) {
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/index.jsx.js", nil))
 	is.Equal(rec.Code, http.StatusOK)
 	contains(t, rec.Body.String(), "Hello, ")
+}
+
+// files lists the files in dir, relative to dir
+func files(t testing.TB, dir string) (paths []string) {
+	t.Helper()
+	err := filepath.WalkDir(dir, func(path string, de fs.DirEntry, err error) error {
+		if err != nil || de.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		paths = append(paths, filepath.ToSlash(rel))
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return paths
+}
+
+func TestBuildWalk(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		".gitignore":   "ignored/\n",
+		"greet.ts":     `export const greet = (name: string) => "Hello, " + name`,
+		"index.jsx": `
+			import React from 'react';
+			import { greet } from './greet.ts';
+			export default function Index(props) {
+				return <div>{greet(props.name)}</div>;
+			}
+		`,
+		"users/show.tsx": `
+			import React from 'react';
+			import { greet } from '../greet.ts';
+			export default function Show(props: { name: string }) {
+				return <div>{greet(props.name)}</div>;
+			}
+		`,
+		"users/layout.tsx": `
+			import React from 'react';
+			export default function Layout(props: { head: React.ReactNode, children: React.ReactNode }) {
+				return <html><head>{props.head}</head><body className="users">{props.children}</body></html>;
+			}
+		`,
+		"users/error.tsx": `
+			import React from 'react';
+			export default function Error(props: { error: Error }) {
+				return <div>{props.error.message}</div>;
+			}
+		`,
+		"ignored/page.jsx":      `export default () => null`,
+		"dist/dom/stale.jsx.js": `old`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	is.NoErr(virt.Write(virt.Map{
+		"node_modules/fake/page.jsx": `export default () => null`,
+	}, dir))
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithMinify(true),
+		jig.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	is.NoErr(viewer.Build(ctx))
+	is.Equal(files(t, filepath.Join(dir, "dist", "ssr")), []string{"index.jsx.js", "users/show.tsx.js"})
+	// .jsx and .tsx pages share chunks
+	domFiles := files(t, filepath.Join(dir, "dist", "dom"))
+	is.Equal(len(domFiles), 3)
+	is.True(strings.HasPrefix(domFiles[0], "chunk-"))
+	is.Equal(domFiles[1:], []string{"index.jsx.js", "users/show.tsx.js"})
+	// Pages render with their layout
+	viewer, err = jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(true),
+		jig.WithMinify(true),
+		jig.WithLiveRoute(""),
+		jig.WithFS(os.DirFS(dir)),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	is.NoErr(viewer.Render(ctx, actual, "users/show.tsx", map[string]any{"name": "Jig"}))
+	contains(t, actual.String(), `<body class="users"><div id="root"><div>Hello, Jig</div></div>`)
+}
+
+func TestBuildNoPages(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"layout.jsx": `export default (props) => props.children`,
+	}, dir))
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	err = viewer.Build(context.Background())
+	is.True(err != nil)
+	contains(t, err.Error(), "jig: no pages in ")
 }
 
 func TestBuildCleansOutDir(t *testing.T) {
@@ -1033,17 +1146,17 @@ func TestBuildCleansOutDir(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithMinify(true),
-		react.WithLiveRoute(""),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithMinify(true),
+		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
 		is.NoErr(viewer.Close())
 	})
-	is.NoErr(viewer.Build("index.jsx"))
+	is.NoErr(viewer.Build(ctx))
 	_, err = os.Stat(filepath.Join(dir, "dist", "ssr", "removed.jsx.js"))
 	is.True(errors.Is(err, fs.ErrNotExist))
 	_, err = os.Stat(filepath.Join(dir, "dist", "dom", "chunk-OLD.js"))
@@ -1071,18 +1184,18 @@ func TestBuildMinifyProductionReact(t *testing.T) {
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
 	// Like cmd/react under go run: not production, but minified
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithMinify(true),
-		react.WithLiveRoute(""),
-		react.WithEnv(map[string]string{}),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithMinify(true),
+		jig.WithLiveRoute(""),
+		jig.WithEnv(map[string]string{}),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
 		is.NoErr(viewer.Close())
 	})
-	is.NoErr(viewer.Build("index.jsx"))
+	is.NoErr(viewer.Build(ctx))
 	// Development builds of React include full warning messages
 	for _, path := range []string{"dist/ssr/index.jsx.js", "dist/dom/index.jsx.js"} {
 		code, err := os.ReadFile(filepath.Join(dir, path))
@@ -1099,9 +1212,9 @@ func TestRenderMissingPage(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -1133,11 +1246,11 @@ func TestRenderCanceled(t *testing.T) {
 	}, dir))
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithCache(true),
-		react.WithLiveRoute(""),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(true),
+		jig.WithLiveRoute(""),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -1160,10 +1273,10 @@ func TestLiveReload(t *testing.T) {
 	is.NoErr(virt.Write(virt.Map{
 		"index.jsx": `export default function Index() { return null }`,
 	}, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(true),
-		react.WithLiveRoute("/.live"),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(true),
+		jig.WithLiveRoute("/.live"),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -1217,9 +1330,9 @@ func TestServeNodeModulesETag(t *testing.T) {
 		"node_modules/greet/package.json": `{"name":"greet","main":"index.js"}`,
 		"node_modules/greet/index.js":     `export const greeting = "v1"`,
 	}, dir))
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
@@ -1282,11 +1395,11 @@ func TestRenderHead(t *testing.T) {
 	ctx := context.Background()
 	is.NoErr(npm.Install(ctx, dir))
 	logs := new(bytes.Buffer)
-	viewer, err := react.Load(
-		react.WithDir(dir),
-		react.WithWatch(false),
-		react.WithLiveRoute(""),
-		react.WithLog(slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))),
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithLiveRoute(""),
+		jig.WithLog(slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))),
 	)
 	is.NoErr(err)
 	t.Cleanup(func() {
