@@ -2,7 +2,7 @@ package goja
 
 import (
 	"log/slog"
-	"sync"
+	"runtime"
 
 	"github.com/dop251/goja"
 	"github.com/matthewmueller/jig/internal/goja/urls"
@@ -23,27 +23,35 @@ var (
 )
 
 func New(log *slog.Logger) *Pool {
-	return &Pool{
-		p: &sync.Pool{
-			New: func() any {
-				vm := goja.New()
-				urls.Enable(vm)
-				vm.GlobalObject().Set("console", console(log))
-				vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-				return vm
-			},
-		},
-	}
+	return &Pool{log, make(chan *goja.Runtime, runtime.GOMAXPROCS(0))}
 }
 
+// Pool keeps idle VMs, along with the bundles evaluated in them. Unlike
+// sync.Pool, idle VMs aren't dropped during garbage collection, which
+// rendering triggers often.
 type Pool struct {
-	p *sync.Pool
+	log  *slog.Logger
+	idle chan *goja.Runtime
 }
 
+// Acquire an idle VM or create one
 func (v *Pool) Acquire() *goja.Runtime {
-	return v.p.Get().(*goja.Runtime)
+	select {
+	case vm := <-v.idle:
+		return vm
+	default:
+	}
+	vm := goja.New()
+	urls.Enable(vm)
+	vm.GlobalObject().Set("console", console(v.log))
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+	return vm
 }
 
+// Release the VM to be reused, dropping it when the pool is full
 func (v *Pool) Release(vm *goja.Runtime) {
-	v.p.Put(vm)
+	select {
+	case v.idle <- vm:
+	default:
+	}
 }
