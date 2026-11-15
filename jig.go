@@ -270,6 +270,11 @@ var loaders = map[string]esbuild.Loader{
 //go:embed inject.js
 var injectJs string
 
+// navigate.js swaps in pages when links are clicked, instead of loading them
+//
+//go:embed navigate.js
+var navigateJs string
+
 // ssrBundle names the bundle of views for the server
 const ssrBundle = "views"
 
@@ -348,7 +353,15 @@ func (v *Viewer) transformDOM(fw framework.Framework, split bool, entries ...str
 		Define:              v.options.Define,
 		JSX:                 esbuild.JSXAutomatic,
 		Loader:              loaders,
-		Plugins:             fw.Client(),
+		Inject:              []string{"inject:navigate.js"},
+		Plugins: append(fw.Client(),
+			esbuild.Virtual(`^inject:navigate.js$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
+				return esbuild.OnLoadResult{
+					Contents:   &navigateJs,
+					ResolveDir: v.options.Dir,
+				}, nil
+			}),
+		),
 	}
 	// Development build. Added after the framework's plugins, since its
 	// runtime modules also look like bare imports.

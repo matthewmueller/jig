@@ -67,12 +67,12 @@ function renderToHtml(element: ReactNode): string | Error {
 }
 
 // The head tags and styles collected while rendering the root. Pages that
-// hydrate pass their clientRoute.
+// render in the browser pass their clientRoute, so it starts downloading early.
 function headOf(context: Context, clientRoute?: string): JSX.Element {
   const heads: JSX.Element[] = [];
   if (clientRoute) {
     heads.push(
-      <script key={clientRoute} defer type="module" src={clientRoute} />,
+      <link key={clientRoute} rel="modulepreload" href={clientRoute} />,
     );
   }
   for (let key in context.heads) {
@@ -173,9 +173,10 @@ export function renderHtml(
   if (contentHtml instanceof Error) {
     return renderError(layout, ErrorView, context, contentHtml);
   }
+  const clientRoute = "/" + names[last] + ".js";
   const html = renderDocument(
     layout,
-    headOf(context, "/" + names[last] + ".js"),
+    headOf(context, clientRoute),
     <Fragment>
       <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
       {/* Embedded as Go encoded it, which escapes "<" for the script tag */}
@@ -183,6 +184,14 @@ export function renderHtml(
         type="application/json"
         id="react-props"
         dangerouslySetInnerHTML={{ __html: props[last] }}
+      ></script>
+      {/* Inline, so it runs again when navigation swaps the page in. A
+       * module with a src only runs once per document. */}
+      <script
+        type="module"
+        dangerouslySetInnerHTML={{
+          __html: `import mount from ${JSON.stringify(clientRoute)}; mount()`,
+        }}
       ></script>
     </Fragment>,
   );

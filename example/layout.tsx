@@ -9,7 +9,13 @@ export default function Layout(props: Props) {
   return (
     <html>
       <head>{props.head}</head>
-      <body className="whatever">{props.children}</body>
+      <body className="whatever">
+        <nav>
+          <a href="/">Home</a> <a href="/about">About</a>{" "}
+          <a href="/dashboard">Dashboard</a>
+        </nav>
+        {props.children}
+      </body>
     </html>
   )
 }
