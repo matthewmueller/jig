@@ -7,18 +7,16 @@ import (
 )
 
 type Page struct {
-	Entry  string
-	Layout string
-	Error  string
+	Entry string
+	Error string
 }
 
-// Find the pages for entries in dir, in order. Layout and error entries aren't
-// pages, so they're skipped.
+// Find the pages for entries in dir, in order, each with its nearest error
+// view. Layout and error entries aren't pages, so they're skipped.
 func Find(dir string, entries ...string) (pages []*Page, err error) {
 	// TODO: async
 	for _, entry := range entries {
-		switch extless(filepath.Base(entry)) {
-		case "layout", "error":
+		if IsLayout(entry) || extless(entry) == "error" {
 			continue
 		}
 		page, err := find(dir, filepath.Dir(entry), entry)
@@ -30,15 +28,17 @@ func Find(dir string, entries ...string) (pages []*Page, err error) {
 	return pages, nil
 }
 
-func extless(base string) string {
+// IsLayout reports whether entry is a layout, which only renders on the server
+func IsLayout(entry string) bool {
+	return extless(entry) == "layout"
+}
+
+func extless(entry string) string {
+	base := filepath.Base(entry)
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
 func find(root, dir, entry string) (*Page, error) {
-	// Verify that the entry exists
-	if _, err := os.Stat(filepath.Join(root, entry)); err != nil {
-		return nil, err
-	}
 	page := &Page{
 		Entry: entry,
 	}
@@ -51,18 +51,12 @@ next:
 	}
 	for _, de := range des {
 		name := de.Name()
-		if entryExt != filepath.Ext(name) {
-			continue
-		}
-		switch extless(name) {
-		case "layout":
-			page.Layout = filepath.Join(dir, name)
-		case "error":
+		if entryExt == filepath.Ext(name) && extless(name) == "error" {
 			page.Error = filepath.Join(dir, name)
 		}
 	}
-	// Exit if we've reached the root or filled both layout and error
-	if dir == "." || (page.Error != "" && page.Layout != "") {
+	// Exit if we've reached the root or found the nearest error view
+	if dir == "." || page.Error != "" {
 		return page, nil
 	}
 	// Recurse

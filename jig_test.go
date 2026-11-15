@@ -65,7 +65,7 @@ func TestRenderBasic(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script><script async="" type="module" src="/.live"></script></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
 	diff.TestString(t, actual.String(), expect)
 }
@@ -100,7 +100,7 @@ func TestRenderMultiple(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err := doc.Find("#root").Html()
@@ -112,7 +112,7 @@ func TestRenderMultiple(t *testing.T) {
 	diff.TestString(t, propsText, expectProps)
 
 	actual = new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "about.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "about.jsx", Props: map[string]any{"name": "World"}}))
 	doc, err = goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err = doc.Find("#root").Html()
@@ -124,7 +124,7 @@ func TestRenderMultiple(t *testing.T) {
 	diff.TestString(t, propsText, expectProps)
 
 	actual = new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	doc, err = goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err = doc.Find("#root").Html()
@@ -136,7 +136,7 @@ func TestRenderMultiple(t *testing.T) {
 	diff.TestString(t, propsText, expectProps)
 
 	actual = new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "about.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "about.jsx", Props: map[string]any{"name": "World"}}))
 	doc, err = goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHtml, err = doc.Find("#root").Html()
@@ -176,7 +176,7 @@ func TestRenderEnv(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -221,7 +221,7 @@ func TestRenderDefaultEnv(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -267,7 +267,7 @@ func TestRenderMissingEnv(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -312,7 +312,7 @@ func TestRenderImportTSX(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -364,7 +364,7 @@ func TestRenderImportGoTypes(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "Jig"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "Jig"}}))
 	contains(t, actual.String(), `<div id="root"><div>Hello, Jig</div></div>`)
 	handler := viewer.Middleware(http.NotFoundHandler())
 	rec := httptest.NewRecorder()
@@ -447,7 +447,7 @@ func TestRenderImportGenericFormTSX(t *testing.T) {
 	})
 
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", nil))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx"}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -499,7 +499,7 @@ func TestRenderProduction(t *testing.T) {
 
 	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	diff.TestString(t, actual.String(), expect)
 }
 
@@ -584,12 +584,12 @@ func TestRenderConcurrent(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	// Warm the cache
-	is.NoErr(viewer.Render(ctx, new(bytes.Buffer), "index.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, new(bytes.Buffer), jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	var wg sync.WaitGroup
 	for range 16 {
 		wg.Go(func() {
 			actual := new(bytes.Buffer)
-			if err := viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}); err != nil {
+			if err := viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}); err != nil {
 				t.Error(err)
 			} else if !strings.Contains(actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`) {
 				t.Errorf("unexpected render %q", actual.String())
@@ -622,7 +622,7 @@ func TestRenderPropsEscaped(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"content": "</script><script>alert(1)</script>"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"content": "</script><script>alert(1)</script>"}}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	is.Equal(doc.Find("script:not([src])").Length(), 1)
@@ -661,7 +661,7 @@ func TestRenderPropsJSON(t *testing.T) {
 		Ptr   *int   `json:"ptr,omitzero"`
 	}
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", props{Name: "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: props{Name: "World"}}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -697,7 +697,7 @@ func TestRenderPropsNilSlice(t *testing.T) {
 		Meta  map[string]int `json:"meta"`
 	}
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", props{}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: props{}}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	rootHTML, err := doc.Find("#root").Html()
@@ -938,11 +938,11 @@ func TestRenderErrorKeepsErrorView(t *testing.T) {
 	})
 	// The error view fails, so the default error view is used
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"fail": "error view fails"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"fail": "error view fails"}}))
 	contains(t, actual.String(), "An error occurred: <!-- -->error view fails")
 	// The next error still uses the custom error view
 	actual = new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"fail": "boom"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"fail": "boom"}}))
 	contains(t, actual.String(), "Custom: <!-- -->boom")
 }
 
@@ -975,7 +975,7 @@ func TestRenderConcurrentDev(t *testing.T) {
 	for range 64 {
 		wg.Go(func() {
 			actual := new(bytes.Buffer)
-			if err := viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}); err != nil {
+			if err := viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}); err != nil {
 				t.Error(err)
 			} else if !strings.Contains(actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`) {
 				t.Errorf("unexpected render %q", actual.String())
@@ -1025,7 +1025,7 @@ func TestBuild(t *testing.T) {
 	is.NoErr(builder.Build(ctx, "."))
 	is.NoErr(builder.Close())
 	// The goja shims are only for the server
-	ssrCode, err := os.ReadFile(filepath.Join(dir, "dist", "ssr", "index.jsx.js"))
+	ssrCode, err := os.ReadFile(filepath.Join(dir, "dist", "ssr", "views.js"))
 	is.NoErr(err)
 	contains(t, string(ssrCode), "_otherPort")
 	domFiles, err := filepath.Glob(filepath.Join(dir, "dist", "dom", "*.js"))
@@ -1053,7 +1053,7 @@ func TestBuild(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "about.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "about.jsx", Props: map[string]any{"name": "World"}}))
 	contains(t, actual.String(), `<div id="root"><div>I&#x27;m <!-- -->World<!-- -->!</div></div>`)
 	handler := viewer.Middleware(http.NotFoundHandler())
 	rec := httptest.NewRecorder()
@@ -1131,13 +1131,14 @@ func TestBuildWalk(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	is.NoErr(viewer.Build(ctx, "."))
-	is.Equal(files(t, filepath.Join(dir, "dist", "ssr")), []string{"index.jsx.js", "users/show.tsx.js"})
+	// Every view is in one bundle for the server
+	is.Equal(files(t, filepath.Join(dir, "dist", "ssr")), []string{"views.js"})
 	// .jsx and .tsx pages share chunks
 	domFiles := files(t, filepath.Join(dir, "dist", "dom"))
 	is.Equal(len(domFiles), 3)
 	is.True(strings.HasPrefix(domFiles[0], "chunk-"))
 	is.Equal(domFiles[1:], []string{"index.jsx.js", "users/show.tsx.js"})
-	// Pages render with their layout
+	// Pages render inside the layouts they're given
 	viewer, err = jig.Load(
 		jig.WithDir(dir),
 		jig.WithWatch(false),
@@ -1151,8 +1152,16 @@ func TestBuildWalk(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "users/show.tsx", map[string]any{"name": "Jig"}))
+	is.NoErr(viewer.Render(ctx, actual,
+		jig.View{Name: "users/layout.tsx"},
+		jig.View{Name: "users/show.tsx", Props: map[string]any{"name": "Jig"}},
+	))
 	contains(t, actual.String(), `<body class="users"><div id="root"><div>Hello, Jig</div></div>`)
+	// The bundle only has the views that were built
+	actual = new(bytes.Buffer)
+	err = viewer.Render(ctx, actual, jig.View{Name: "users/missing.tsx"})
+	is.True(errors.Is(err, fs.ErrNotExist))
+	is.Equal(actual.Len(), 0)
 }
 
 func TestBuildNoPages(t *testing.T) {
@@ -1202,7 +1211,7 @@ func TestBuildViewsDir(t *testing.T) {
 	})
 	// Only the views directory is built, but pages are still relative to dir
 	is.NoErr(viewer.Build(ctx, "view"))
-	is.Equal(files(t, filepath.Join(dir, "dist", "ssr")), []string{"view/index.jsx.js"})
+	is.Equal(files(t, filepath.Join(dir, "dist", "ssr")), []string{"views.js"})
 	is.Equal(files(t, filepath.Join(dir, "dist", "dom")), []string{"view/index.jsx.js"})
 }
 
@@ -1238,7 +1247,7 @@ func TestBuildCleansOutDir(t *testing.T) {
 	is.True(errors.Is(err, fs.ErrNotExist))
 	_, err = os.Stat(filepath.Join(dir, "dist", "dom", "chunk-OLD.js"))
 	is.True(errors.Is(err, fs.ErrNotExist))
-	_, err = os.Stat(filepath.Join(dir, "dist", "ssr", "index.jsx.js"))
+	_, err = os.Stat(filepath.Join(dir, "dist", "ssr", "views.js"))
 	is.NoErr(err)
 	_, err = os.Stat(filepath.Join(dir, "dist", "dom", "index.jsx.js"))
 	is.NoErr(err)
@@ -1274,7 +1283,7 @@ func TestBuildMinifyProductionReact(t *testing.T) {
 	})
 	is.NoErr(viewer.Build(ctx, "."))
 	// Development builds of React include full warning messages
-	for _, path := range []string{"dist/ssr/index.jsx.js", "dist/dom/index.jsx.js"} {
+	for _, path := range []string{"dist/ssr/views.js", "dist/dom/index.jsx.js"} {
 		code, err := os.ReadFile(filepath.Join(dir, path))
 		is.NoErr(err)
 		is.True(!strings.Contains(string(code), "Invalid hook call"))
@@ -1298,7 +1307,7 @@ func TestRenderMissingPage(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	err = viewer.Render(ctx, actual, "missing.jsx", nil)
+	err = viewer.Render(ctx, actual, jig.View{Name: "missing.jsx"})
 	is.True(errors.Is(err, fs.ErrNotExist))
 	is.Equal(actual.Len(), 0)
 }
@@ -1336,11 +1345,11 @@ func TestRenderCanceled(t *testing.T) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 	actual := new(bytes.Buffer)
-	err = viewer.Render(timeoutCtx, actual, "loop.jsx", nil)
+	err = viewer.Render(timeoutCtx, actual, jig.View{Name: "loop.jsx"})
 	is.True(errors.Is(err, context.DeadlineExceeded))
 	is.Equal(actual.Len(), 0)
 	// Other renders still work
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	contains(t, actual.String(), `<div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`)
 }
 
@@ -1483,11 +1492,196 @@ func TestRenderHead(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 	actual := new(bytes.Buffer)
-	is.NoErr(viewer.Render(ctx, actual, "index.jsx", map[string]any{"name": "World"}))
+	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
 	is.Equal(doc.Find("head title").Text(), "Hello")
 	is.Equal(doc.Find("head meta[charset]").Length(), 1)
 	is.Equal(doc.Find(`head meta[name="description"]`).AttrOr("content", ""), "A page")
 	is.Equal(logs.String(), "")
+}
+
+const layoutJsx = `
+	import React from 'react';
+	export default function Layout(props) {
+		return <html><head>{props.head}</head><body><nav>{props.user}</nav>{props.children}</body></html>;
+	}
+`
+
+func TestRenderLayout(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"layout.jsx":   layoutJsx,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	is.NoErr(viewer.Render(ctx, actual,
+		jig.View{Name: "layout.jsx", Props: map[string]any{"user": "Ann", "head": "replaced"}},
+		jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}},
+	))
+	// The layout's props render on the server, but aren't sent to the browser.
+	// The head replaces a prop of the same name.
+	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script></head><body><nav>Ann</nav><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
+	diff.TestString(t, actual.String(), expect)
+}
+
+func TestRenderStackInvalid(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"layout.jsx": layoutJsx,
+		"frame.jsx":  `export default (props) => props.children`,
+		"index.jsx":  `export default () => null`,
+	}, dir))
+	ctx := context.Background()
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+
+	err = viewer.Render(ctx, actual)
+	is.True(err != nil)
+	is.Equal(err.Error(), `jig: no views to render`)
+
+	// A layout can't be the page
+	err = viewer.Render(ctx, actual, jig.View{Name: "layout.jsx"})
+	is.True(err != nil)
+	is.Equal(err.Error(), `jig: layout "layout.jsx" can't be the page`)
+	err = viewer.Render(ctx, actual, jig.View{Name: "index.jsx"}, jig.View{Name: "layout.jsx"})
+	is.True(err != nil)
+	is.Equal(err.Error(), `jig: layout "layout.jsx" can't be the page`)
+
+	// Only a layout wraps a page, and it comes first
+	err = viewer.Render(ctx, actual, jig.View{Name: "frame.jsx"}, jig.View{Name: "index.jsx"})
+	is.True(err != nil)
+	is.Equal(err.Error(), `jig: "frame.jsx" can't wrap a page yet`)
+	err = viewer.Render(ctx, actual, jig.View{Name: "layout.jsx"}, jig.View{Name: "admin/layout.jsx"}, jig.View{Name: "index.jsx"})
+	is.True(err != nil)
+	is.Equal(err.Error(), `jig: layout "admin/layout.jsx" must come first`)
+
+	err = viewer.Render(ctx, actual, jig.View{Name: "admin/layout.jsx"}, jig.View{Name: "index.jsx"})
+	is.True(errors.Is(err, fs.ErrNotExist))
+
+	is.Equal(actual.Len(), 0)
+}
+
+func TestRenderLayoutErrorView(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"layout.jsx":   layoutJsx,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				throw new Error("boom");
+			}
+		`,
+		"error.jsx": `
+			import React from 'react';
+			export default function Error(props) {
+				return <div>Custom: {props.error.message}</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	actual := new(bytes.Buffer)
+	is.NoErr(viewer.Render(ctx, actual,
+		jig.View{Name: "layout.jsx", Props: map[string]any{"user": "Ann"}},
+		jig.View{Name: "index.jsx"},
+	))
+	// The error view renders inside the layout, and doesn't hydrate
+	expect := `<!doctype html><html><head></head><body><nav>Ann</nav><div id="root"><div>Custom: <!-- -->boom</div></div></body></html>`
+	diff.TestString(t, actual.String(), expect)
+}
+
+func TestRenderConcurrentStacks(t *testing.T) {
+	is := is.New(t)
+	dir := t.TempDir()
+	is.NoErr(virt.Write(virt.Map{
+		"package.json": packageJson,
+		"layout.jsx":   layoutJsx,
+		"index.jsx": `
+			import React from 'react';
+			export default function Index(props) {
+				return <div>Hello, {props.name}!</div>;
+			}
+		`,
+		"about.jsx": `
+			import React from 'react';
+			export default function About(props) {
+				return <div>I'm {props.name}!</div>;
+			}
+		`,
+	}, dir))
+	ctx := context.Background()
+	is.NoErr(npm.Install(ctx, dir))
+	viewer, err := jig.Load(
+		jig.WithDir(dir),
+		jig.WithWatch(false),
+		jig.WithCache(true),
+		jig.WithLiveRoute(""),
+	)
+	is.NoErr(err)
+	t.Cleanup(func() {
+		is.NoErr(viewer.Close())
+	})
+	layout := jig.View{Name: "layout.jsx", Props: map[string]any{"user": "Ann"}}
+	index := jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}
+	about := jig.View{Name: "about.jsx", Props: map[string]any{"name": "World"}}
+	render := func(expect string, views ...jig.View) {
+		actual := new(bytes.Buffer)
+		if err := viewer.Render(ctx, actual, views...); err != nil {
+			t.Error(err)
+		} else if !strings.Contains(actual.String(), expect) {
+			t.Errorf("render %q does not contain %q", actual.String(), expect)
+		}
+	}
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			render(`<body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`, index)
+		})
+		wg.Go(func() {
+			render(`<body><nav>Ann</nav><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div>`, layout, index)
+		})
+		wg.Go(func() {
+			render(`<body><nav>Ann</nav><div id="root"><div>I&#x27;m <!-- -->World<!-- -->!</div></div>`, layout, about)
+		})
+	}
+	wg.Wait()
 }

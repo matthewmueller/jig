@@ -11,6 +11,7 @@ import (
 type (
 	Runtime  = goja.Runtime
 	Value    = goja.Value
+	Object   = goja.Object
 	Callable = goja.Callable
 	Program  = goja.Program
 )

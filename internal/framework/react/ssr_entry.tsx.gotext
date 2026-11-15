@@ -1,27 +1,36 @@
 "use strict"
 
-import { Page, renderHtml } from "runtime:ssr_runtime.tsx"
-import EntryView from "./{{ $.Page.Entry }}"
+import { renderHtml } from "runtime:ssr_runtime.tsx"
 
-{{- if $.Page.Layout }}
-import LayoutView from "./{{ $.Page.Layout }}"
+{{- range $i, $page := $.Pages }}
+import Page{{ $i }} from {{ printf "%q" (print "./" $page.Entry) }}
+{{- if $page.Error }}
+import Error{{ $i }} from {{ printf "%q" (print "./" $page.Error) }}
+{{- end }}
 {{- end }}
 
-{{- if $.Page.Error }}
-import ErrorView from "./{{ $.Page.Error }}"
+{{- range $i, $view := $.Views }}
+import View{{ $i }} from {{ printf "%q" (print "./" $view) }}
 {{- end }}
 
-const page: Page = {
-  EntryView,
-  clientRoute: "/{{ $.Page.Entry }}.js",
-  {{- if $.Page.Layout }}
-  LayoutView,
+export const views = {
+  {{- range $i, $page := $.Pages }}
+  {{ printf "%q" $page.Entry }}: Page{{ $i }},
   {{- end }}
-  {{- if $.Page.Error }}
-  ErrorView,
+  {{- range $i, $view := $.Views }}
+  {{ printf "%q" $view }}: View{{ $i }},
   {{- end }}
 }
 
-export function render(propsJSON: string) {
-  return renderHtml(page, propsJSON)
+// Error views by the page they're nearest to
+const errors = {
+  {{- range $i, $page := $.Pages }}
+  {{- if $page.Error }}
+  {{ printf "%q" $page.Entry }}: Error{{ $i }},
+  {{- end }}
+  {{- end }}
+}
+
+export function render(names: string[], props: string[]) {
+  return renderHtml(views, errors, names, props)
 }

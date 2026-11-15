@@ -40,15 +40,17 @@ type React struct {
 var _ framework.Framework = (*React)(nil)
 
 type ssrEntryData struct {
-	Page *pages.Page
+	Pages []*pages.Page
+	Views []string
 }
 
-// Server plugins render page to HTML with react-dom/server
-func (r *React) Server(page *pages.Page) []esbuild.Plugin {
+// Server plugins render stacks of views to HTML with react-dom/server
+func (r *React) Server(pages []*pages.Page, views ...string) []esbuild.Plugin {
 	return []esbuild.Plugin{
 		esbuild.Virtual(`^entry\:`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 			contents, err := ssrEntryTemplate.Render(ssrEntryData{
-				Page: page,
+				Pages: pages,
+				Views: views,
 			})
 			if err != nil {
 				return esbuild.OnLoadResult{}, fmt.Errorf("react: failed to render ssr entry template: %w", err)

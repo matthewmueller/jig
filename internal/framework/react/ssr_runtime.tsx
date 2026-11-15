@@ -24,14 +24,13 @@ const Context = createContext<Context>({
   heads: {},
 });
 
-export type Page = {
-  LayoutView?: ComponentType<any>;
-  ErrorView?: ComponentType<any>;
-  EntryView: ComponentType<any>;
-  clientRoute?: string;
-};
+type Views = Record<string, ComponentType<any>>;
 
-export type PathProps = Record<string, unknown>;
+// A layout with its props
+type Layout = {
+  View: ComponentType<any>;
+  props: object;
+};
 
 type LayoutProps = {
   head: JSX.Element;
@@ -55,6 +54,9 @@ function defaultError(props: ErrorProps) {
   return <div>An error occurred: {props.error.message}</div>;
 }
 
+// Wraps pages that are rendered without a layout
+const noLayout: Layout = { View: defaultLayout, props: {} };
+
 function renderToHtml(element: ReactNode): string | Error {
   try {
     return renderToString(element);
@@ -64,67 +66,9 @@ function renderToHtml(element: ReactNode): string | Error {
   }
 }
 
-function renderError(page: Page, context: Context, error: Error): string {
-  let { LayoutView, ErrorView } = page;
-  ErrorView = ErrorView || defaultError;
-  let contentHtml = renderToHtml(
-    <Context.Provider value={context}>
-      <ErrorView error={error} />
-    </Context.Provider>,
-  );
-  if (contentHtml instanceof Error) {
-    // Try again with the default error handler. Copy the page since it's
-    // shared across renders.
-    return renderError({ ...page, ErrorView: defaultError }, context, contentHtml);
-  }
-  // TODO: we can probably dedupe some of this
-  const heads: JSX.Element[] = [];
-  for (let key in context.heads) {
-    heads.push(context.heads[key]);
-  }
-  for (let id in context.styles) {
-    heads.push(
-      <style
-        key={id}
-        id={id}
-        dangerouslySetInnerHTML={{ __html: context.styles[id] }}
-      />,
-    );
-  }
-  LayoutView = LayoutView || defaultLayout;
-  let html = renderToHtml(
-    <LayoutView head={<Fragment>{heads}</Fragment>}>
-      <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
-    </LayoutView>,
-  );
-  if (html instanceof Error) {
-    return renderError({ ...page, LayoutView: defaultLayout }, context, html);
-  }
-  return `<!doctype html>` + html;
-}
-
-export function renderHtml(page: Page, propsJSON: string): string {
-  let { LayoutView, EntryView, clientRoute } = page;
-  const props: unknown = JSON.parse(propsJSON);
-  const context: Context = {
-    styles: {},
-    heads: {},
-  };
-  if (typeof props !== "object") {
-    return renderError(
-      page,
-      context,
-      new Error("react: props must be an object"),
-    );
-  }
-  let contentHtml = renderToHtml(
-    <Context.Provider value={context}>
-      <EntryView {...props} />
-    </Context.Provider>,
-  );
-  if (contentHtml instanceof Error) {
-    return renderError(page, context, contentHtml);
-  }
+// The head tags and styles collected while rendering the root. Pages that
+// hydrate pass their clientRoute.
+function headOf(context: Context, clientRoute?: string): JSX.Element {
   const heads: JSX.Element[] = [];
   if (clientRoute) {
     heads.push(
@@ -143,25 +87,109 @@ export function renderHtml(page: Page, propsJSON: string): string {
       />,
     );
   }
-  LayoutView = LayoutView || defaultLayout;
-  let html = renderToHtml(
-    <LayoutView head={<Fragment>{heads}</Fragment>}>
-      <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
-      {clientRoute && (
-        <script
-          key="react-props"
-          type="application/json"
-          id="react-props"
-          dangerouslySetInnerHTML={{ __html: propsJSON }}
-        ></script>
-      )}
-    </LayoutView>,
+  return <Fragment>{heads}</Fragment>;
+}
+
+// Render the layout around the root. The head and children win over props of
+// the same name.
+function renderDocument(
+  layout: Layout,
+  head: JSX.Element,
+  root: ReactNode,
+): string | Error {
+  const { View, props } = layout;
+  const html = renderToHtml(
+    <View {...props} head={head}>
+      {root}
+    </View>,
   );
-  // TODO: dedupe with above
   if (html instanceof Error) {
-    return renderError(page, context, html);
+    return html;
   }
   return `<!doctype html>` + html;
+}
+
+function renderError(
+  layout: Layout,
+  ErrorView: ComponentType<any>,
+  context: Context,
+  error: Error,
+): string {
+  const contentHtml = renderToHtml(
+    <Context.Provider value={context}>
+      <ErrorView error={error} />
+    </Context.Provider>,
+  );
+  if (contentHtml instanceof Error) {
+    // Try again with the default error view
+    return renderError(layout, defaultError, context, contentHtml);
+  }
+  const html = renderDocument(
+    layout,
+    headOf(context),
+    <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />,
+  );
+  if (html instanceof Error) {
+    // Try again with the default layout
+    return renderError(noLayout, ErrorView, context, html);
+  }
+  return html;
+}
+
+// Render a stack of views, outermost first, with the JSON props of each. The
+// last view is the page, which the browser hydrates with its props. A layout
+// may come before it, which wraps the root and only renders on the server.
+export function renderHtml(
+  views: Views,
+  errors: Views,
+  names: string[],
+  props: string[],
+): string {
+  const last = names.length - 1;
+  const layout =
+    last > 0
+      ? { View: views[names[0]], props: JSON.parse(props[0]) }
+      : noLayout;
+  const PageView = views[names[last]];
+  const ErrorView = errors[names[last]] || defaultError;
+  const pageProps: unknown = JSON.parse(props[last]);
+  const context: Context = {
+    styles: {},
+    heads: {},
+  };
+  if (typeof pageProps !== "object") {
+    return renderError(
+      layout,
+      ErrorView,
+      context,
+      new Error("react: props must be an object"),
+    );
+  }
+  const contentHtml = renderToHtml(
+    <Context.Provider value={context}>
+      <PageView {...pageProps} />
+    </Context.Provider>,
+  );
+  if (contentHtml instanceof Error) {
+    return renderError(layout, ErrorView, context, contentHtml);
+  }
+  const html = renderDocument(
+    layout,
+    headOf(context, "/" + names[last] + ".js"),
+    <Fragment>
+      <div id="root" dangerouslySetInnerHTML={{ __html: contentHtml }} />
+      {/* Embedded as Go encoded it, which escapes "<" for the script tag */}
+      <script
+        type="application/json"
+        id="react-props"
+        dangerouslySetInnerHTML={{ __html: props[last] }}
+      ></script>
+    </Fragment>,
+  );
+  if (html instanceof Error) {
+    return renderError(layout, ErrorView, context, html);
+  }
+  return html;
 }
 
 export class Head extends Component<PropsWithChildren> {

@@ -62,7 +62,8 @@ func main() {
 	defer viewer.Close()
 	http.Handle("/", viewer.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		props := dashboard.Props{Name: "Matt"}
-		if err := viewer.Render(r.Context(), w, "dashboard/dashboard.tsx", props); err != nil {
+		page := jig.View{Name: "dashboard/dashboard.tsx", Props: props}
+		if err := viewer.Render(r.Context(), w, page); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})))
@@ -76,7 +77,38 @@ func main() {
 
 Commit an empty `dist/.gitkeep` so `//go:embed all:dist` compiles before the first build.
 
-Pages can sit next to a `layout.tsx` and an `error.tsx`, which apply to the pages in that directory and below.
+To wrap a page in a layout, pass it before the page. Layouts are views named `layout.tsx`:
+
+```go
+viewer.Render(r.Context(), w,
+	jig.View{Name: "layout.tsx", Props: layout.Props{User: "Matt"}},
+	jig.View{Name: "dashboard/dashboard.tsx", Props: props},
+)
+```
+
+```tsx
+// layout.tsx
+import type { ReactNode } from "react"
+import type { Props } from "./props.go"
+
+export default function Layout(props: Props & { head: ReactNode; children: ReactNode }) {
+  return (
+    <html>
+      <head>{props.head}</head>
+      <body>
+        <nav>{props.user}</nav>
+        {props.children}
+      </body>
+    </html>
+  )
+}
+```
+
+- The layout only renders on the server, so its props are never sent to the browser. Only the page hydrates.
+- The layout gets `head`, which holds the page's scripts, head tags and styles.
+- A page without a layout renders inside a bare `<html>`.
+
+A page that throws renders the nearest `error.tsx` instead, from its directory or the ones above it.
 
 See [example/](example) for a working app.
 

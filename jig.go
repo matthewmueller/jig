@@ -239,6 +239,14 @@ func ignorer(dir, outDir string) func(path string) bool {
 	}
 }
 
+// View is a view file, relative to the viewer's directory, and the props to
+// render it with. It's an alias of an unnamed type, so other packages can
+// declare the same type and call Render without importing jig.
+type View = struct {
+	Name  string
+	Props any
+}
+
 type Viewer struct {
 	options     *options
 	frameworks  map[string]framework.Framework
@@ -262,24 +270,14 @@ var loaders = map[string]esbuild.Loader{
 //go:embed inject.js
 var injectJs string
 
-// transformSSR builds pages for the server. Outputs are kept in memory.
-func (v *Viewer) transformSSR(fw framework.Framework, pages []*pages.Page) ([]esbuild.OutputFile, error) {
-	outputs := make([][]esbuild.OutputFile, len(pages))
-	eg := new(errgroup.Group)
-	for i, page := range pages {
-		eg.Go(func() (err error) {
-			outputs[i], err = v.transformPageSSR(fw, page)
-			return err
-		})
-	}
-	if err := eg.Wait(); err != nil {
-		return nil, err
-	}
-	return slices.Concat(outputs...), nil
-}
+// ssrBundle names the bundle of views for the server
+const ssrBundle = "views"
 
-func (v *Viewer) transformPageSSR(fw framework.Framework, page *pages.Page) ([]esbuild.OutputFile, error) {
-	plugins := append(fw.Server(page),
+// transformSSR bundles pages for the server, along with the views that pages
+// render inside of. The bundle evaluates into __jig__[key]. Outputs are kept
+// in memory.
+func (v *Viewer) transformSSR(fw framework.Framework, key string, pages []*pages.Page, views ...string) ([]esbuild.OutputFile, error) {
+	plugins := append(fw.Server(pages, views...),
 		esbuild.Virtual(`^inject:inject.js$`, func(args esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 			return esbuild.OnLoadResult{
 				Contents:   &injectJs,
@@ -291,8 +289,8 @@ func (v *Viewer) transformPageSSR(fw framework.Framework, page *pages.Page) ([]e
 	result, err := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: []esbuild.EntryPoint{
 			{
-				InputPath:  "entry:" + page.Entry,
-				OutputPath: page.Entry,
+				InputPath:  "entry:" + ssrBundle,
+				OutputPath: ssrBundle,
 			},
 		},
 		AbsWorkingDir:     v.options.Dir,
@@ -305,7 +303,7 @@ func (v *Viewer) transformPageSSR(fw framework.Framework, page *pages.Page) ([]e
 		MinifyIdentifiers: v.options.Minify,
 		MinifySyntax:      v.options.Minify,
 		Platform:          esbuild.PlatformBrowser,
-		GlobalName:        fmt.Sprintf("__jig__[%q]", page.Entry),
+		GlobalName:        fmt.Sprintf("__jig__[%q]", key),
 		Define:            v.options.Define,
 		JSX:               esbuild.JSXAutomatic,
 		Loader:            loaders,
@@ -460,22 +458,23 @@ func (v *Viewer) transformNodeModule(absDir, module string) ([]byte, error) {
 	return []byte(rewritten), nil
 }
 
-func getRenderFunction(vm *goja.Runtime, path string) (goja.Callable, error) {
+// getBundle returns the views and the render function of the SSR bundle that
+// evaluated into __jig__[key]
+func getBundle(vm *goja.Runtime, key string) (views *goja.Object, render goja.Callable, err error) {
 	jigObj := vm.Get("__jig__")
 	if jigObj == nil {
-		return nil, fmt.Errorf("jig: unable to load __jig__ object")
+		return nil, nil, fmt.Errorf("jig: unable to load __jig__ object")
 	}
-	pathObj := jigObj.ToObject(vm).Get(path)
-	if pathObj == nil {
-		return nil, fmt.Errorf("jig: unable to load __jig__[%q]", path)
+	bundleObj := jigObj.ToObject(vm).Get(key)
+	if bundleObj == nil {
+		return nil, nil, fmt.Errorf("jig: unable to load __jig__[%q]", key)
 	}
-	obj := pathObj.ToObject(vm)
-	// Get the render function
-	render, ok := goja.AssertFunction(obj.Get("render"))
+	bundle := bundleObj.ToObject(vm)
+	render, ok := goja.AssertFunction(bundle.Get("render"))
 	if !ok {
-		return nil, fmt.Errorf("jig: unable to load __jig__[%q].render function", path)
+		return nil, nil, fmt.Errorf("jig: unable to load __jig__[%q].render function", key)
 	}
-	return render, nil
+	return bundle.Get("views").ToObject(vm), render, nil
 }
 
 // Build the pages in dir for production, replacing previous builds. dir is
@@ -518,7 +517,14 @@ func (v *Viewer) Build(ctx context.Context, dir string) error {
 		} else if len(found) == 0 {
 			continue
 		}
-		ssrFiles, err := v.transformSSR(fw, found)
+		// Bundle every layout, since pages can render inside any one of them
+		var layouts []string
+		for _, entry := range entries {
+			if pages.IsLayout(entry) {
+				layouts = append(layouts, entry)
+			}
+		}
+		ssrFiles, err := v.transformSSR(fw, ssrBundle, found, layouts...)
 		if err != nil {
 			return fmt.Errorf("jig: failed to build: %w", err)
 		}
@@ -649,7 +655,7 @@ func (v *Viewer) Middleware(next http.Handler) http.Handler {
 // isn't a page or a built file.
 func (v *Viewer) serveDOM(path string) ([]byte, error) {
 	// Serve pages and shared chunks from the prebuilt filesystem
-	if v.options.Cache && v.options.FS != nil {
+	if v.prebuilt() {
 		return fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "dom", path+".js"))
 	}
 
@@ -678,57 +684,100 @@ func (v *Viewer) serveDOM(path string) ([]byte, error) {
 	return code, nil
 }
 
-// Render the page at path with props into w. Nothing is written when an error
-// is returned. Errors thrown by components render the page's error view.
-func (v *Viewer) Render(ctx context.Context, w io.Writer, path string, props any) error {
+// prebuilt reports whether views are served from a previous Build
+func (v *Viewer) prebuilt() bool {
+	return v.options.Cache && v.options.FS != nil
+}
+
+// Render the views into w as one HTML document. Views are listed outermost
+// first: an optional layout, which is named layout.* and only renders on the
+// server, then the page. Nothing is written when an error is returned. A
+// missing view returns an error that matches fs.ErrNotExist. Errors thrown by
+// components render the page's error view.
+func (v *Viewer) Render(ctx context.Context, w io.Writer, views ...View) error {
+	if len(views) == 0 {
+		return errors.New("jig: no views to render")
+	}
+	page := views[len(views)-1].Name
+	if pages.IsLayout(page) {
+		return fmt.Errorf("jig: layout %q can't be the page", page)
+	}
+	for i, view := range views[:len(views)-1] {
+		if !pages.IsLayout(view.Name) {
+			return fmt.Errorf("jig: %q can't wrap a page yet", view.Name)
+		} else if i > 0 {
+			return fmt.Errorf("jig: layout %q must come first", view.Name)
+		}
+	}
+
 	vm := v.pool.Acquire()
 
 	// Stop the render when the context is canceled
 	stop := context.AfterFunc(ctx, func() {
 		vm.Interrupt(ctx.Err())
 	})
-	html, err := v.render(vm, path, props)
+	html, err := v.render(vm, views)
 	// Interrupts skip JS finally blocks, which can leave the VM in a bad state,
 	// so only reuse VMs that weren't interrupted
 	if stop() {
 		v.pool.Release(vm)
 	}
 	if err != nil {
-		return fmt.Errorf("jig: unable to render page %q: %w", path, err)
+		return fmt.Errorf("jig: unable to render page %q: %w", page, err)
 	}
 
 	_, err = io.WriteString(w, html)
 	return err
 }
 
-func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error) {
-	// Pooled VMs don't share globals, so evaluate the page in this VM when it's
-	// missing. Without caching, always evaluate to pick up the latest code.
-	render, err := getRenderFunction(vm, path)
+func (v *Viewer) render(vm *goja.Runtime, views []View) (string, error) {
+	names := make([]string, len(views))
+	props := make([]string, len(views))
+	for i, view := range views {
+		names[i] = view.Name
+		// Encode props with Go's JSON rules so struct tags are respected, SSR and
+		// the browser see the same props, nil slices and maps become [] and {}, and
+		// "<" is escaped for the script tag.
+		data, err := json.Marshal(view.Props, jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true))
+		if err != nil {
+			return "", fmt.Errorf("jig: unable to encode props: %w", err)
+		}
+		props[i] = string(data)
+	}
+
+	// The prebuilt bundle has every view. Otherwise each stack of views is
+	// bundled when it's rendered, so the stack is the key.
+	key := ssrBundle
+	if !v.prebuilt() {
+		key = strings.Join(names, ",")
+	}
+
+	// Pooled VMs don't share globals, so evaluate the bundle in this VM when
+	// it's missing. Without caching, always evaluate to pick up the latest code.
+	bundled, render, err := getBundle(vm, key)
 	if err != nil || !v.options.Cache {
-		program, err := v.compile(path)
+		program, err := v.compile(key, names)
 		if err != nil {
 			return "", err
 		}
 		if _, err = vm.RunProgram(program); err != nil {
-			return "", fmt.Errorf("jig: failed to evaluate code for %s: %w", path, err)
+			return "", fmt.Errorf("jig: failed to evaluate code for %s: %w", key, err)
 		}
-		render, err = getRenderFunction(vm, path)
+		bundled, render, err = getBundle(vm, key)
 		if err != nil {
-			return "", fmt.Errorf("jig: failed to get render function for %s: %w", path, err)
+			return "", fmt.Errorf("jig: failed to get render function for %s: %w", key, err)
 		}
 	}
 
-	// Encode props with Go's JSON rules so struct tags are respected, SSR and
-	// the browser see the same props, nil slices and maps become [] and {}, and
-	// "<" is escaped for the script tag.
-	propsJSON, err := json.Marshal(props, jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true))
-	if err != nil {
-		return "", fmt.Errorf("jig: unable to encode props: %w", err)
+	// The prebuilt bundle only has the views that existed when it was built
+	for _, name := range names {
+		if bundled.Get(name) == nil {
+			return "", fmt.Errorf("jig: view %q: %w", name, fs.ErrNotExist)
+		}
 	}
 
 	// Call the render function
-	result, err := render(goja.Undefined(), vm.ToValue(string(propsJSON)))
+	result, err := render(goja.Undefined(), vm.ToValue(names), vm.ToValue(props))
 	if err != nil {
 		return "", fmt.Errorf("jig: unable to render the component: %w", err)
 	}
@@ -738,49 +787,58 @@ func (v *Viewer) render(vm *goja.Runtime, path string, props any) (string, error
 	return html, nil
 }
 
-// readSSR reads the prebuilt SSR code for path from the filesystem when
-// caching, otherwise it builds the page to get the current version of the code.
-func (v *Viewer) readSSR(path string) ([]byte, error) {
-	if v.options.Cache && v.options.FS != nil {
-		code, err := fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "ssr", path+".js"))
+// readSSR reads the prebuilt SSR bundle from the filesystem when caching,
+// otherwise it bundles views to get the current version of the code.
+func (v *Viewer) readSSR(key string, views []string) ([]byte, error) {
+	if v.prebuilt() {
+		code, err := fs.ReadFile(v.options.FS, gopath.Join(v.options.OutDir, "ssr", ssrBundle+".js"))
 		if err != nil {
 			return nil, fmt.Errorf("jig: failed to read ssr file: %w", err)
 		}
 		return code, nil
 	}
-	fw, ok := v.frameworks[gopath.Ext(path)]
+	page := views[len(views)-1]
+	fw, ok := v.frameworks[gopath.Ext(page)]
 	if !ok {
-		return nil, fmt.Errorf("jig: no framework renders %q files", gopath.Ext(path))
+		return nil, fmt.Errorf("jig: no framework renders %q files", gopath.Ext(page))
 	}
-	pages, err := pages.Find(v.options.Dir, path)
+	// Check for missing views here, because the bundler's errors don't match
+	// fs.ErrNotExist
+	for _, view := range views {
+		if _, err := os.Stat(filepath.Join(v.options.Dir, view)); err != nil {
+			return nil, err
+		}
+	}
+	pages, err := pages.Find(v.options.Dir, page)
 	if err != nil {
 		return nil, fmt.Errorf("jig: failed to find pages: %w", err)
 	}
-	files, err := v.transformSSR(fw, pages)
+	files, err := v.transformSSR(fw, key, pages, views[:len(views)-1]...)
 	if err != nil {
 		return nil, fmt.Errorf("jig: failed to transform for ssr: %w", err)
 	}
-	return outputFile(files, gopath.Join(v.options.OutDir, "ssr", path+".js"))
+	// One entry without code splitting builds into one file
+	return files[0].Contents, nil
 }
 
-// compile the SSR code for path. Programs aren't tied to a VM, so they can be
-// cached and shared across the pool.
-func (v *Viewer) compile(path string) (*goja.Program, error) {
-	if program, ok := v.renderCache.Get(path); ok {
+// compile the SSR bundle for views. Programs aren't tied to a VM, so they can
+// be cached and shared across the pool.
+func (v *Viewer) compile(key string, views []string) (*goja.Program, error) {
+	if program, ok := v.renderCache.Get(key); ok {
 		return program, nil
 	}
-	code, err := v.readSSR(path)
+	code, err := v.readSSR(key, views)
 	if err != nil {
 		return nil, err
 	}
 
-	program, err := goja.Compile(path, string(code), false)
+	program, err := goja.Compile(key, string(code), false)
 	if err != nil {
-		return nil, fmt.Errorf("jig: failed to compile code for %s: %w", path, err)
+		return nil, fmt.Errorf("jig: failed to compile code for %s: %w", key, err)
 	}
 
 	if v.options.Cache {
-		v.renderCache.Set(path, program)
+		v.renderCache.Set(key, program)
 	}
 	return program, nil
 }

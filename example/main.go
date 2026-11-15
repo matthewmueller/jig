@@ -36,6 +36,8 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer viewer.Close()
+	// Every page renders inside the layout
+	layout := jig.View{Name: "layout.tsx"}
 	router := mux.New()
 	router.Use(viewer)
 	router.Get("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,9 +45,9 @@ func run(log *slog.Logger) error {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := viewer.Render(r.Context(), w, "index.tsx", map[string]any{
+		if err := viewer.Render(r.Context(), w, layout, jig.View{Name: "index.tsx", Props: map[string]any{
 			"name": "Matt",
-		}); err != nil {
+		}}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}))
@@ -54,9 +56,9 @@ func run(log *slog.Logger) error {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := viewer.Render(r.Context(), w, "dashboard/dashboard.tsx", dashboard.Props{
+		if err := viewer.Render(r.Context(), w, layout, jig.View{Name: "dashboard/dashboard.tsx", Props: dashboard.Props{
 			Name: "Matt",
-		}); err != nil {
+		}}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}))
@@ -65,9 +67,9 @@ func run(log *slog.Logger) error {
 		defer func() {
 			fmt.Printf("Request %s took %s\n", r.URL.Path, time.Since(now))
 		}()
-		if err := viewer.Render(r.Context(), w, "about.tsx", map[string]any{
+		if err := viewer.Render(r.Context(), w, layout, jig.View{Name: "about.tsx", Props: map[string]any{
 			"name": "Max",
-		}); err != nil {
+		}}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}))
