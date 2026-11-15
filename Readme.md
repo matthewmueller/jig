@@ -110,6 +110,15 @@ export default function Layout(props: Props & { head: ReactNode; children: React
 
 A page that throws renders the nearest `error.tsx` instead, from its directory or the ones above it.
 
+### Navigation
+
+Clicking a link to another page on the same site fetches the page's HTML and swaps it in, like [Turbolinks](https://github.com/turbolinks/turbolinks). The layout re-renders on the server, and the JavaScript that's already loaded is reused, so navigating feels instant.
+
+- The browser loads the page normally for modified clicks, `target="_blank"`, `download` links, other sites, and anchors on the same page.
+- It also loads the page normally when the response isn't HTML or the request fails.
+- Back and forward fetch the page again and restore the scroll position.
+- Form submissions are full page loads.
+
 See [example/](example) for a working app.
 
 ## CLI Reference

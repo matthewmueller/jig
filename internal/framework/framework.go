@@ -15,6 +15,9 @@ type Framework interface {
 	// views, outermost first, with the JSON props of each, and returns the full
 	// HTML document.
 	Server(pages []*pages.Page, views ...string) []esbuild.Plugin
-	// Client plugins load "entry:<entry>" as a module that hydrates the page.
+	// Client plugins load "entry:<entry>" as a module whose default export
+	// renders the page. The page's HTML calls it from an inline module script,
+	// which runs again each time navigation swaps the page in. Before a swap,
+	// "jig:unload" is dispatched on the document to unmount the page.
 	Client() []esbuild.Plugin
 }

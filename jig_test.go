@@ -66,7 +66,7 @@ func TestRenderBasic(t *testing.T) {
 	})
 	actual := new(bytes.Buffer)
 	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
-	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script><script async="" type="module" src="/.live"></script></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
+	expect := `<!doctype html><html><head><link rel="modulepreload" href="/index.jsx.js"/><script async="" type="module" src="/.live"></script></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script><script type="module">import mount from "/index.jsx.js"; mount()</script></body></html>`
 	diff.TestString(t, actual.String(), expect)
 }
 
@@ -497,7 +497,7 @@ func TestRenderProduction(t *testing.T) {
 		is.NoErr(viewer.Close())
 	})
 
-	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
+	expect := `<!doctype html><html><head><link rel="modulepreload" href="/index.jsx.js"/></head><body><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script><script type="module">import mount from "/index.jsx.js"; mount()</script></body></html>`
 	actual := new(bytes.Buffer)
 	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"name": "World"}}))
 	diff.TestString(t, actual.String(), expect)
@@ -556,7 +556,11 @@ func TestServeClient(t *testing.T) {
 	body, err := io.ReadAll(res.Body)
 	is.NoErr(err)
 	contains(t, string(body), `"Hello, ",`)
-	contains(t, string(body), `props2.name,`)
+	contains(t, string(body), `props.name,`)
+	// Pages navigate without full loads, and export mount for navigation to
+	// call again
+	contains(t, string(body), `window.__jig_navigate = true`)
+	contains(t, string(body), "mount as default")
 }
 
 func TestRenderConcurrent(t *testing.T) {
@@ -625,7 +629,8 @@ func TestRenderPropsEscaped(t *testing.T) {
 	is.NoErr(viewer.Render(ctx, actual, jig.View{Name: "index.jsx", Props: map[string]any{"content": "</script><script>alert(1)</script>"}}))
 	doc, err := goquery.NewDocumentFromReader(actual)
 	is.NoErr(err)
-	is.Equal(doc.Find("script:not([src])").Length(), 1)
+	// Only the props and the page's mount script, nothing injected
+	is.Equal(doc.Find("script:not([src])").Length(), 2)
 	propsText := doc.Find("#react-props").Text()
 	is.True(!strings.Contains(propsText, "</"))
 	var props map[string]string
@@ -1539,7 +1544,7 @@ func TestRenderLayout(t *testing.T) {
 	))
 	// The layout's props render on the server, but aren't sent to the browser.
 	// The head replaces a prop of the same name.
-	expect := `<!doctype html><html><head><script defer="" type="module" src="/index.jsx.js"></script></head><body><nav>Ann</nav><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script></body></html>`
+	expect := `<!doctype html><html><head><link rel="modulepreload" href="/index.jsx.js"/></head><body><nav>Ann</nav><div id="root"><div>Hello, <!-- -->World<!-- -->!</div></div><script type="application/json" id="react-props">{"name":"World"}</script><script type="module">import mount from "/index.jsx.js"; mount()</script></body></html>`
 	diff.TestString(t, actual.String(), expect)
 }
 

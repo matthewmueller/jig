@@ -10,6 +10,12 @@ function tryParse(el) {
   }
 }
 
-const props = tryParse(document.getElementById("react-props"))
-const root = createRoot(document.getElementById("root") || document.body)
-root.render(<Entry {...props} />)
+// Render the page in the current document. Runs again each time navigation
+// swaps the page in.
+export default function mount() {
+  const props = tryParse(document.getElementById("react-props"))
+  const root = createRoot(document.getElementById("root") || document.body)
+  root.render(<Entry {...props} />)
+  // Clean up effects before navigation swaps in the next page
+  document.addEventListener("jig:unload", () => root.unmount(), { once: true })
+}
