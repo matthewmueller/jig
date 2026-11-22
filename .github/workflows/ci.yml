@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build ./...
+      # tidy, vet, modernize -fix, staticcheck, go test -race
+      - name: make test
+        run: make test
+      - name: Check make test left no changes (go mod tidy / modernize -fix)
+        run: git diff --exit-code
+
+  example:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: example
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: example/go.mod
+          cache-dependency-path: example/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Generate dist and types
+        run: go generate ./...
+      - name: Check generated types are committed
+        run: git diff --exit-code
+      - run: go vet ./...
+      - run: go build ./...
