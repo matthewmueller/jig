@@ -1,3 +1,19 @@
+# 0.2.0 / 2026-11-22
+
+- fix make release
+- upgrade goja for lazy string concatenation
+- navigate between pages without full page loads
+- keep idle goja VMs across garbage collections
+- render an explicit stack of views with an optional server-only layout
+- fix the modernize path in make test
+- add readme and license
+- test generating types that reference another module
+- pass the views directory to jig so views can live in a subdirectory
+- generate typescript types for go files in the views directory
+- make jig framework-agnostic with a single jig command
+- rename views to jig
+- add ETags to production page and chunk responses
+
 # 0.1.0 / 2026-10-07
 
 - switch to using encoding/json/v2
